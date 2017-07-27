@@ -4,7 +4,7 @@
   "description": "A reference Firebase LTI-provider application",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha test/"
   },
   "repository": {
     "type": "git",
@@ -21,6 +21,10 @@
   },
   "homepage": "https://github.com/NUS-ALSET/firebase-lti#readme",
   "devDependencies": {
-    "firebase-tools": "^3.9.1"
+    "chai": "^4.1.0",
+    "firebase-json": "^0.4.0",
+    "firebase-tools": "^3.9.1",
+    "mocha": "^3.4.2",
+    "targaryen": "^3.0.1"
   }
 }
