@@ -1,0 +1,26 @@
+{
+  "name": "firebase-lti",
+  "version": "0.0.0",
+  "description": "A reference Firebase LTI-provider application",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/NUS-ALSET/firebase-lti.git"
+  },
+  "keywords": [
+    "firebase",
+    "LTI"
+  ],
+  "author": "Chris Boesch",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/NUS-ALSET/firebase-lti/issues"
+  },
+  "homepage": "https://github.com/NUS-ALSET/firebase-lti#readme",
+  "devDependencies": {
+    "firebase-tools": "^3.9.1"
+  }
+}
