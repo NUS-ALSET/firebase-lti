@@ -12,7 +12,7 @@ chai.use(targaryen);
 exports.chai = chai;
 exports.expect = chai.expect;
 exports.targaryen = targaryen;
-exports.getRules = function() {
+exports.getRules = function () {
   const rulePath = path.join(__dirname, '../database.rules.json');
   const rulesBody = fs.readFileSync(rulePath);
 

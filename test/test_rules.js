@@ -1,6 +1,6 @@
 'use strict';
 
-const { expect, getRules, targaryen} = require('./chai');
+const {expect, getRules, targaryen} = require('./chai');
 
 const anom = () => null;
 const bob = () => ({uid: 'bob'});
@@ -13,7 +13,7 @@ describe('firebase rules', function () {
     targaryen.setFirebaseRules(rules);
   });
 
-  it('should deny read by default', function() {
+  it('should deny read by default', function () {
     expect(anom()).cannot.read.path('/');
     expect(bob()).cannot.read.path('/');
   });
