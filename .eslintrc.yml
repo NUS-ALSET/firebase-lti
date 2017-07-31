@@ -1,0 +1,62 @@
+plugins:
+  - node
+extends:
+  - xo/esnext
+  - plugin:node/recommended
+env:
+  node: true
+  commonjs: true
+  es6: true
+parserOptions:
+  ecmaFeatures:
+    jsx: false
+    experimentalObjectRestSpread: false
+  ecmaVersion: 2016
+  sourceType: script
+rules:
+
+  # possible errors
+  eqeqeq:
+    - error
+    - smart
+  no-console:
+    - warn
+  no-confusing-arrow:
+    - error
+  no-eq-null:
+    - "off"
+  strict:
+    - error
+    - safe
+
+  # styling
+  arrow-body-style:
+    - error
+    - as-needed
+  brace-style:
+    - error
+    - 1tbs
+    - allowSingleLine: true
+  indent:
+    - error
+    - 2
+  lines-around-directive:
+    - error
+    - always
+  newline-after-var:
+    - error
+    - always
+  one-var:
+    - error
+    - initialized: never
+      uninitialized: always
+  padded-blocks:
+    - "off"
+  prefer-arrow-callback:
+    - error
+    - allowNamedFunctions: true
+  valid-jsdoc:
+    - error
+    - requireParamDescription: true
+      requireReturnDescription: false
+      requireReturn: false

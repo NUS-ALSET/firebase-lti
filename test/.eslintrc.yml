@@ -1,0 +1,10 @@
+extends:
+  - "../.eslintrc.yml"
+env:
+  mocha: true
+  node: true
+  commonjs: true
+  es6: true
+rules:
+  prefer-arrow-callback:
+    - off

@@ -1,0 +1,47 @@
+{
+  "name": "firebase-lti",
+  "version": "0.0.0",
+  "description": "A reference Firebase LTI-provider application",
+  "main": "index.js",
+  "files": [
+    "public/",
+    "functions/index.js",
+    "functions/package.json",
+    "database.rules.json",
+    "firebase.json",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "format": "npm run lint -- --fix",
+    "lint": "eslint public/ test/",
+    "test": "mocha test/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/NUS-ALSET/firebase-lti.git"
+  },
+  "keywords": [
+    "firebase",
+    "LTI"
+  ],
+  "author": "Chris Boesch",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/NUS-ALSET/firebase-lti/issues"
+  },
+  "homepage": "https://github.com/NUS-ALSET/firebase-lti#readme",
+  "devDependencies": {
+    "chai": "^4.1.0",
+    "eslint": "^4.3.0",
+    "eslint-config-xo": "^0.18.2",
+    "eslint-plugin-node": "^5.1.1",
+    "firebase-json": "^0.4.0",
+    "firebase-tools": "^3.9.1",
+    "mocha": "^3.4.2",
+    "targaryen": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=6.0.0"
+  }
+}
