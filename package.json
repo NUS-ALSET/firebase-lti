@@ -15,7 +15,8 @@
   ],
   "scripts": {
     "format": "npm run lint -- --fix",
-    "lint": "eslint public/ test/",
+    "lint": "eslint public/ test/ functions/lib/",
+    "start": "firebase serve --only functions,hosting",
     "test": "mocha test/"
   },
   "repository": {
