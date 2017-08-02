@@ -30,7 +30,7 @@ describe('firebase rules', function () {
   describe('for /provider/oauth1', function () {
 
     beforeEach(function () {
-      targaryen.setFirebaseData({provider: {oauth: {someKey: {
+      targaryen.setFirebaseData({provider: {oauth1: {someKey: {
         createdAt: Date.now(),
         secret: 'some secret'
       }}}});

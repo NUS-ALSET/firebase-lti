@@ -1,0 +1,21 @@
+path /provider/oauth1/{consumerKey} is OauthKey {
+  read() { isWorker() }
+  create() { true }
+}
+
+type OauthKey {
+  secret: String;
+  createdAt: InitialTimestamp;
+}
+
+type CurrentTimestamp extends Number {
+  validate() { this == now }
+}
+
+type InitialTimestamp extends Number {
+  validate() { initial(this, now) }
+}
+
+initial(value, init) { value == (prior(value) == null ? init : prior(value)) }
+
+isWorker() { auth != null && auth.isWorker == true }

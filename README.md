@@ -7,7 +7,7 @@ A reference Firebase LTI-provider application.
 In a terminal, install node dependencies:
 ```shell
 npm install
-npm install -g firebase-tools
+npm install -g firebase-tools firebase-bolt
 ```
 
 If you don't have Firebase project setup, head to the [Firebase console]

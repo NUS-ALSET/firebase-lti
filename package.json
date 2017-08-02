@@ -14,10 +14,11 @@
     "README.md"
   ],
   "scripts": {
+    "deploy:rules": "firebase deploy --only database",
     "format": "npm run lint -- --fix",
     "lint": "eslint public/ test/ functions/lib/",
     "start": "firebase serve --only functions,hosting",
-    "test": "mocha test/"
+    "test": "firebase-bolt database.rules.bolt && mocha test/"
   },
   "repository": {
     "type": "git",
@@ -38,8 +39,9 @@
     "eslint": "^4.3.0",
     "eslint-config-xo": "^0.18.2",
     "eslint-plugin-node": "^5.1.1",
+    "firebase-bolt": "^0.8.2",
     "firebase-json": "^0.4.0",
-    "firebase-tools": "^3.9.1",
+    "firebase-tools": "^3.9.2",
     "mocha": "^3.4.2",
     "targaryen": "^3.0.1"
   },
