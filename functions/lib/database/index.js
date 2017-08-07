@@ -9,7 +9,8 @@ const admin = require('firebase-admin');
 const base64 = require('base64url');
 const functions = require('firebase-functions');
 
-const INVALID_KEY_CHAR = new Set(['$', '#', '[', ']', '/', '.']);
+const utils = require('./utils');
+
 const BASIC_REQUEST = 'basic-lti-launch-request';
 
 admin.initializeApp(config());
@@ -71,7 +72,7 @@ module.exports = {
    */
   getCredentials(key) {
 
-    if (!isValidKey(key)) {
+    if (!utils.isValidKey(key)) {
       return Promise.reject(new Error(`"${key}" is not a valid firebase key.`));
     }
 
@@ -99,7 +100,7 @@ module.exports = {
     init(req) {
       const {consumer_key: domain, body: {resource_link_id: linkId}} = req;
 
-      if (!isValidKey(domain) || !isValidKey(linkId)) {
+      if (!utils.isValidKey(domain) || !utils.isValidKey(linkId)) {
         return Promise.reject(new Error(`"${domain}/${linkId}" is a valid path for firebase.`));
       }
 
@@ -150,20 +151,6 @@ module.exports = {
   }
 
 };
-
-/**
- * Check the key is valid.
- *
- * @param {string} key A string intended to be used as firebase database key
- * @returns {boolean}
- */
-function isValidKey(key) {
-  if (!key || typeof key !== 'string') {
-    return false;
-  }
-
-  return Array.from(key).some(c => INVALID_KEY_CHAR.has(c)) === false;
-}
 
 function newLaunch(req) {
   const domain = req.consumer_key;
