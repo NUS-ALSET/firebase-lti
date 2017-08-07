@@ -9,6 +9,7 @@ const admin = require('firebase-admin');
 const base64 = require('base64url');
 const functions = require('firebase-functions');
 
+const nonceStore = require('./nonce-store');
 const utils = require('./utils');
 
 const BASIC_REQUEST = 'basic-lti-launch-request';
@@ -47,6 +48,8 @@ function config() {
 
 module.exports = {
 
+  nonceStore: nonceStore.create,
+
   /**
    * Generate and save oauth1 credentials to firebase.
    *
@@ -58,10 +61,11 @@ module.exports = {
 
     const secret = randomString(32);
     const newKeyRef = keysRef.push();
+    const key = newKeyRef.key;
 
-    return newKeyRef
-      .set({secret, createdAt: now()})
-      .then(() => ({secret, key: newKeyRef.key}));
+    return newKeyRef.child('credentials')
+      .set({key, secret, createdAt: now()})
+      .then(() => ({key, secret}));
   },
 
   /**
@@ -77,7 +81,7 @@ module.exports = {
     }
 
     const db = admin.database();
-    const ref = db.ref(`provider/oauth1/${key}`);
+    const ref = db.ref(`provider/oauth1/${key}/credentials`);
 
     return ref.once('value')
       .then(snapshot => snapshot.val())

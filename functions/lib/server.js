@@ -83,7 +83,16 @@ function supportedReq(req) {
 
 function validateSignature(req, key, secret) {
   return new Promise((resolve, reject) => {
-    const provider = new lti.Provider(key, secret, {trustProxy: true});
+    const provider = new lti.Provider(key, secret, {
+      // Firebase functions is accessed via a reverse proxy. The lti signature
+      // validation needs to use the original hostname and not the functions
+      // server one.
+      trustProxy: true,
+
+      // Save nonces in datastore and ensure the request oauth1 nonce cannot be
+      // used twice.
+      nonceStore: database.nonceStore(key)
+    });
 
     provider.valid_request(req, (err, isValid) => {
       if (err != null) {

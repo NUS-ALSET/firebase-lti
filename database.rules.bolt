@@ -1,8 +1,17 @@
 path /provider {
 
-  /oauth1/{consumerKey} is OauthKey {
+  /oauth1/{consumerKey} {
     read() { isWorker() }
-    create() { true }
+
+    /credentials is OauthKey {
+      validate() { this.key == $consumerKey }
+      create() { true }
+    }
+
+    /nonces/{nonce}/expireAt is Number {
+      create() { isWorker() }
+      delete() { isWorker() && prior(this) < now }
+    }
   }
 
   /launches/{consumerKey}/{resourceLinkId} {
@@ -31,6 +40,7 @@ path /provider {
 }
 
 type OauthKey {
+  key: String;
   secret: String;
   createdAt: InitialTimestamp;
 }
