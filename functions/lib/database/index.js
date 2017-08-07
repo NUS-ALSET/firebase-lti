@@ -30,7 +30,7 @@ function config() {
   const {hostname} = url.parse(databaseURL);
   const [projectId] = hostname.split('.', 1);
 
-  const jsonPath = path.join(__dirname, `../${projectId}-service-account.json`);
+  const jsonPath = path.join(__dirname, `../../${projectId}-service-account.json`);
   const content = fs.readFileSync(jsonPath, 'utf-8');
   const serviceAccount = JSON.parse(content);
 
