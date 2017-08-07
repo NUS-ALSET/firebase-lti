@@ -14,7 +14,8 @@
     "README.md"
   ],
   "scripts": {
-    "deploy:rules": "firebase deploy --only database",
+    "deploy-rules": "firebase deploy --only database",
+    "deploy-triggers": "firebase deploy --only functions:verify",
     "format": "npm run lint -- --fix",
     "lint": "eslint public/ test/ functions/lib/",
     "start": "firebase serve --only functions,hosting",

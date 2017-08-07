@@ -152,6 +152,28 @@ module.exports = {
 
         resolve(auth.createCustomToken(uid, {userId, domain, isInstructor, isUser}));
       });
+    },
+
+    /**
+     * Evaluate solution and give it a grade.
+     *
+     * For this demo, the solution just need to exist.
+     *
+     * @param {functions.database.DeltaSnapshot|admin.database.DataSnapshot} solution Solution to evaluate
+     * @param {{customerKey: string, linkId: string, userId: string}} params Path parameters
+     * @returns {Promise<admin.database.Reference>}
+     */
+    gradeSolution(solution, {consumerKey, linkId, userId}) {
+      const path = `provider/launches/${consumerKey}/${linkId}/users/${userId}/grade`;
+
+      if (!utils.isValidKey(consumerKey, linkId, userId)) {
+        return new Error(`"${path}" is not a valid firebase path.`);
+      }
+
+      const db = admin.database();
+      const ref = db.ref(path);
+
+      return ref.set(solution.exists() ? 100 : 0);
     }
 
   }
