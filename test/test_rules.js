@@ -30,30 +30,43 @@ describe('firebase rules', function () {
   describe('for /provider/oauth1', function () {
 
     beforeEach(function () {
-      targaryen.setFirebaseData({provider: {oauth1: {someKey: {
-        createdAt: Date.now(),
-        secret: 'some secret'
-      }}}});
+      targaryen.setFirebaseData({
+        provider: {
+          oauth1: {
+            someKey: {
+              credentials: {
+                key: 'someKey',
+                createdAt: Date.now(),
+                secret: 'some secret'
+              }
+            }
+          }
+        }
+      });
     });
 
     it('should deny read to anyone expect functions workers', function () {
-      expect(anom()).cannot.read.path('/provider/oauth1/someKey');
-      expect(bob()).cannot.read.path('/provider/oauth1/someKey');
-      expect(worker()).can.read.path('/provider/oauth1/someKey');
+      expect(anom()).cannot.read.path('/provider/oauth1/someKey/credentials');
+      expect(bob()).cannot.read.path('/provider/oauth1/someKey/credentials');
+      expect(worker()).can.read.path('/provider/oauth1/someKey/credentials');
     });
 
     it('should allow creating of new key', function () {
-      expect(anom()).can.write({secret: 'some secret', createdAt: now()}).to.path('/provider/oauth1/someOtherKey');
+      expect(anom()).can.write({
+        key: 'someOtherKey',
+        secret: 'some secret',
+        createdAt: now()
+      }).to.path('/provider/oauth1/someOtherKey/credentials');
     });
 
     it('should deny updating keys', function () {
-      expect(anom()).cannot.write('some new secret').to.path('/provider/oauth1/someKey/secret');
-      expect(worker()).cannot.write('some new secret').to.path('/provider/oauth1/someKey/secret');
+      expect(anom()).cannot.write('some new secret').to.path('/provider/oauth1/someKey/credentials/secret');
+      expect(worker()).cannot.write('some new secret').to.path('/provider/oauth1/someKey/credentials/secret');
     });
 
     it('should deny deleting keys', function () {
-      expect(anom()).cannot.write(null).to.path('/provider/oauth1/someKey');
-      expect(worker()).cannot.write(null).to.path('/provider/oauth1/someKey');
+      expect(anom()).cannot.write(null).to.path('/provider/oauth1/someKey/credentials');
+      expect(worker()).cannot.write(null).to.path('/provider/oauth1/someKey/credentials');
     });
 
   });
