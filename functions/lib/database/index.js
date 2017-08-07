@@ -84,12 +84,14 @@ module.exports = {
     const ref = db.ref(`provider/oauth1/${key}/credentials`);
 
     return ref.once('value')
-      .then(snapshot => snapshot.val())
-      .then(({secret}) => ({key, secret}))
-      .catch(err => {
-        console.error(err);
+      .then(snapshot => {
+        const credentials = snapshot.val();
 
-        return new Error(`Failed query secret for consumer key "${key}"`);
+        if (credentials == null) {
+          return Promise.reject(new Error(`Failed query secret for consumer key "${key}"`));
+        }
+
+        return credentials;
       });
   },
 
