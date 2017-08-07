@@ -19,7 +19,9 @@ firebase use
 Then run a local server (it only run a local hosting server, the app still need
 remote access to the Firebase server):
 ```shell
-firebase serve
+npm run deploy-rules
+npm run deploy-triggers
+npm start
 ```
 
 
