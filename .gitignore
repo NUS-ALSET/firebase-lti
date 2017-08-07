@@ -61,3 +61,4 @@ typings/
 .firebaserc
 
 database.rules.json
+functions/*-service-account.json
