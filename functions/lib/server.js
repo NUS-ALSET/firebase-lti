@@ -4,6 +4,7 @@ const exphbs = require('express-handlebars');
 const express = require('express');
 const handlebars = require('handlebars');
 const lti = require('@dinoboff/ims-lti');
+const _HmacSha1 = require('@dinoboff/ims-lti/lib/hmac-sha1');
 
 const database = require('./database');
 
@@ -40,6 +41,18 @@ app.post(launchURL, (req, res, next) => {
 });
 
 module.exports = app;
+
+class HmacSha1 extends _HmacSha1 {
+
+  protocol(req) {
+    if (req.headers['x-appengine-https'] === 'on') {
+      return 'https';
+    }
+
+    return super.protocol(req);
+  }
+
+}
 
 /**
  * Validate a request oauth1 credentials and resolve to a LTI provider.
@@ -87,7 +100,7 @@ function validateSignature(req, key, secret) {
       // Firebase functions is accessed via a reverse proxy. The lti signature
       // validation needs to use the original hostname and not the functions
       // server one.
-      trustProxy: true,
+      signer: new HmacSha1({trustProxy: true}),
 
       // Save nonces in datastore and ensure the request oauth1 nonce cannot be
       // used twice.
