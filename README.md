@@ -16,6 +16,9 @@ and create one. Then in a terminal, set this project with firebase-tools:
 firebase use
 ```
 
+You also need to create a service account for this project and save the json
+service account details at `./functions/<project-id>-service-account.json`.
+
 Then run a local server (it only run a local hosting server, the app still need
 remote access to the Firebase server):
 ```shell
