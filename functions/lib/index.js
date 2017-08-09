@@ -7,10 +7,13 @@
 
 'use strict';
 
+const admin = require('firebase-admin');
 const functions = require('firebase-functions');
 
 const server = require('./server');
 const database = require('./database');
+
+admin.initializeApp(database.config());
 
 exports.server = functions.https.onRequest(server);
 

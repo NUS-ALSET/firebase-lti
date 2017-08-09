@@ -1,5 +1,8 @@
 'use strict';
 
+const crypto = require('crypto');
+const base64 = require('base64url');
+
 const INVALID_KEY_CHAR = new Set(['$', '#', '[', ']', '/', '.']);
 
 /**
@@ -16,4 +19,8 @@ exports.isValidKey = function (...keys) {
 
     return Array.from(key).some(c => INVALID_KEY_CHAR.has(c)) === false;
   });
+};
+
+exports.randomString = function (length) {
+  return base64(crypto.randomBytes(length));
 };
