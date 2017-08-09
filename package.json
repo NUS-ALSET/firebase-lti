@@ -19,6 +19,7 @@
     "deploy-triggers": "firebase deploy --only functions:verify",
     "format": "npm run lint -- --fix",
     "lint": "eslint public/ test/ functions/lib/",
+    "postinstall": "cd functions; npm install",
     "start": "firebase serve --only functions,hosting",
     "test": "firebase-bolt database.rules.bolt && mocha test/"
   },
