@@ -59,3 +59,6 @@ typings/
 
 # Firebase cli settings
 .firebaserc
+
+database.rules.json
+functions/*-service-account.json

@@ -1,0 +1,93 @@
+<h1>Basic Activity</h1>
+
+<p id="loading" class="info">Loading...</p>
+
+<div id="main" class="hide">
+
+  <p id="login" class="error">You are logged off. You need to restart this activity.<p>
+
+  <form action="." id="activity">
+    <p>This a simple demo; just click the button for 100% grade.</p>
+    <p><button type="submit" id="mainBtn" disabled="disabled">Click me</button></p>
+    <p>Current grade: <meter min="0" max="100" id="grade" value="0">0%</meter>
+  </form>
+
+<style>
+  .hide {
+    display: none;
+  }
+</style>
+
+<script src="/lti.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const ui = {
+      loading: document.getElementById('loading'),
+      main: document.getElementById('main'),
+      login: document.getElementById('login'),
+      btn: document.getElementById('mainBtn'),
+      grade: document.getElementById('grade')
+    };
+
+    try {
+      firebase.app();
+    } catch (e) {
+      ui.loading.innerHTML = 'Failed to load app.';
+      console.log(e);
+      return;
+    }
+
+    const enable = () => ui.btn.removeAttribute('disabled');
+    const disable = () => ui.btn.setAttribute('disabled', 'disabled');
+    const launch = LTI.launch({
+      token: {{json token}},
+      domain: {{json launch.domain }},
+      resourceLinkId: {{json launch.resourceLinkId }},
+
+      onLoad(err) {
+        console.log('loaded', err);
+
+        if(err == null) {
+          ui.loading.classList.add('hide');
+          ui.main.classList.remove('hide');
+          return;
+        }
+
+        console.error(err);
+        ui.loading.innerHTML = err.message;
+      },
+
+      onAuth(user) {
+        console.log('auth', user);
+        if (user == null) {
+          disable();
+          ui.login.classList.remove('hide');
+          return;
+        }
+
+        ui.login.classList.add('hide');
+        if (launch.grade != null) {
+          enable();
+        }
+      },
+
+      onGrade(value = 0) {
+        console.log('grade', value);
+
+        ui.grade.setAttribute('value', value);
+        ui.grade.innerHTML = `${value}%`;
+
+        if (value !== 100) {
+          enable();
+        } else {
+          disable();
+        }
+      }
+    });
+
+    main.addEventListener('submit', event => {
+      event.preventDefault();
+      launch.solution({clicked: true});
+    });
+  });
+</script>

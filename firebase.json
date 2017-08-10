@@ -1,8 +1,18 @@
 {
   "database": {
-    "rules": "database.rules.json"
+    "rules": "database.rules.bolt"
   },
   "hosting": {
-    "public": "public"
+    "public": "public",
+    "rewrites": [
+      {
+        "source": "/lti/**",
+        "function": "server"
+      },
+      {
+        "source": "/",
+        "function": "server"
+      }
+    ]
   }
 }

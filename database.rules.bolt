@@ -1,0 +1,84 @@
+path /provider {
+
+  /oauth1/{consumerKey} {
+    read() { isWorker() }
+
+    /credentials is OauthKey {
+      validate() { this.key == $consumerKey }
+      create() { true }
+    }
+
+    /nonces/{nonce}/expireAt is Number {
+      create() { isWorker() }
+      delete() { isWorker() && prior(this) < now }
+    }
+  }
+
+  /launches/{consumerKey}/{resourceLinkId} {
+    read() { isWorker() }
+    write() { isWorker() }
+
+    /info is Activity {
+      validate() { this.domain == $consumerKey && this.resourceLinkId == $resourceLinkId }
+    }
+
+    /users/{userId} {
+      read() { isUser(userId) }
+
+      /solution {
+        write() { isUser(userId) }
+
+        /clicked is Boolean;
+      }
+
+      /grade is Number;
+
+    }
+
+  }
+
+}
+
+type OauthKey {
+  key: String;
+  secret: String;
+  createdAt: InitialTimestamp;
+}
+
+type Activity {
+  lti: LTI;
+  domain: String;
+  resourceLinkId: String;
+  contextId: String | Null;
+  toolConsumerGuid: String | Null;
+  presentation: Presentation | Null;
+  custom: String[] | Null;
+}
+
+type LTI {
+  messageType: String;
+  version: String;
+}
+
+type Presentation {
+  target: String | Null;
+  local: String | Null;
+  cssURL: String | Null;
+  width: Number | Null;
+  height: Number | Null;
+  returnURL: String | Null;
+}
+
+type CurrentTimestamp extends Number {
+  validate() { this == now }
+}
+
+type InitialTimestamp extends Number {
+  validate() { initial(this, now) }
+}
+
+initial(value, init) { value == (prior(value) == null ? init : prior(value)) }
+
+isWorker() { auth != null && auth.isWorker == true }
+
+isUser(userId) { auth != null && userId == auth.uid }

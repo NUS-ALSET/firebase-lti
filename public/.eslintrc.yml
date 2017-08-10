@@ -1,0 +1,11 @@
+extends:
+  - "../.eslintrc.yml"
+env:
+  browser: true
+  node: false
+  commonjs: false
+  es6: true
+rules:
+  strict:
+    - error
+    - safe

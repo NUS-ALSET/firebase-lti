@@ -7,7 +7,7 @@ A reference Firebase LTI-provider application.
 In a terminal, install node dependencies:
 ```shell
 npm install
-npm install -g firebase-tools
+npm install -g firebase-tools firebase-bolt
 ```
 
 If you don't have Firebase project setup, head to the [Firebase console]
@@ -16,10 +16,15 @@ and create one. Then in a terminal, set this project with firebase-tools:
 firebase use
 ```
 
+You also need to create a service account for this project and save the json
+service account details at `./functions/<project-id>-service-account.json`.
+
 Then run a local server (it only run a local hosting server, the app still need
 remote access to the Firebase server):
 ```shell
-firebase serve
+npm run deploy-rules
+npm run deploy-triggers
+npm start
 ```
 
 
