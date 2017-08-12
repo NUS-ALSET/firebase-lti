@@ -91,6 +91,26 @@ module.exports = {
     },
 
     /**
+     * Fetch the launch info.
+     *
+     * @param {@dinoboff/ims-lti.Provider} req lti request
+     * @returns {Promise<admin.database.DataSnapshot>}
+     */
+    get(req) {
+      const {consumer_key: domain, body: {resource_link_id: linkId}} = req;
+      const db = admin.database();
+      const ref = db.ref(`provider/launches/${domain}/${linkId}/info`);
+
+      return ref.once('value').then(snapshot => {
+        if (!snapshot.exists()) {
+          return Promise.reject(new Error(`No activity at "${ref.toString()}"`));
+        }
+
+        return snapshot;
+      });
+    },
+
+    /**
      * Create auth token for the lti user.
      *
      * @param {@dinoboff/ims-lti.Provider} req lti request

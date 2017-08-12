@@ -8,3 +8,5 @@ env:
 rules:
   prefer-arrow-callback:
     - off
+  max-nested-callbacks:
+    - off
