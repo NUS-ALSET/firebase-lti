@@ -22,6 +22,130 @@ describe('database', function () {
 
   describe('launches', function () {
 
+    describe('init', function () {
+      let req, ref, snapshot;
+
+      beforeEach(function () {
+        req = {
+          launch_request: true,
+          consumer_key: 'foo',
+          instructor: true,
+          context_id: 'baz',
+          body: {
+            resource_link_id: 'bar',
+            lti_message_type: 'basic-lti-launch-request',
+            lti_version: 'LTI-1p0',
+            tool_consumer_instance_guid: 'someTC'
+          }
+        };
+
+        snapshot = {exists: sinon.stub().returns(true)};
+        ref = {
+          transaction: sinon.stub()
+            .returns(Promise.resolve({snapshot, committed: true}))
+        };
+
+        db.ref.returns(ref);
+      });
+
+      it('should save request info if they do not exist', function () {
+        return database.launches.init(req).then(result => {
+          expect(result).to.equal(snapshot);
+          expect(db.ref).to.have.been.calledOnce();
+          expect(db.ref).to.have.been.calledWithExactly('provider/launches/foo/bar/info');
+          expect(ref.transaction).to.have.been.calledOnce();
+          expect(ref.transaction).to.have.been.calledWith(sinon.match.func);
+
+          return ref.transaction.lastCall.args[0];
+        }).then(
+          txHandler => expect(txHandler(null)).to.eql({
+            custom: {},
+            domain: 'foo',
+            resourceLinkId: 'bar',
+            contextId: 'baz',
+            toolConsumerGuid: 'someTC',
+            lti: {
+              messageType: 'basic-lti-launch-request',
+              version: 'LTI-1p0'
+            },
+            presentation: {
+              target: null,
+              local: null,
+              cssURL: null,
+              width: null,
+              height: null,
+              returnURL: null
+            }
+          })
+        );
+      });
+
+      it('should not save the info if it already exists', function () {
+        return database.launches.init(req).then(() => {
+          expect(ref.transaction).to.have.been.calledOnce();
+          expect(ref.transaction).to.have.been.calledWith(sinon.match.func);
+
+          return ref.transaction.lastCall.args[0];
+        }).then(
+          txHandler => expect(txHandler({})).to.be.undefined()
+        );
+      });
+
+      it('should reject if the user is not an instructor', function () {
+        delete req.instructor;
+
+        return database.launches.init(req).then(
+          () => Promise.reject(new Error('inspected')),
+          () => {}
+        );
+      });
+
+      it('should reject if the consumer key is missing', function () {
+        delete req.consumer_key;
+
+        return database.launches.init(req).then(
+          () => Promise.reject(new Error('inspected')),
+          () => {}
+        );
+      });
+
+      it('should reject if the resource link is missing', function () {
+        delete req.body.resource_link_id;
+
+        return database.launches.init(req).then(
+          () => Promise.reject(new Error('inspected')),
+          () => {}
+        );
+      });
+
+      it('should reject if the lti version is missing', function () {
+        delete req.body.lti_version;
+
+        return database.launches.init(req).then(() => {
+          expect(ref.transaction).to.have.been.calledOnce();
+          expect(ref.transaction).to.have.been.calledWith(sinon.match.func);
+
+          return ref.transaction.lastCall.args[0];
+        }).then(
+          txHandler => expect(() => txHandler(null)).to.throw()
+        );
+      });
+
+      it('should reject if the lti message type is missing', function () {
+        delete req.body.lti_message_type;
+
+        return database.launches.init(req).then(() => {
+          expect(ref.transaction).to.have.been.calledOnce();
+          expect(ref.transaction).to.have.been.calledWith(sinon.match.func);
+
+          return ref.transaction.lastCall.args[0];
+        }).then(
+          txHandler => expect(() => txHandler(null)).to.throw()
+        );
+      });
+
+    });
+
     describe('get', function () {
 
       it('should fetch the launch info', function () {

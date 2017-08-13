@@ -6,8 +6,6 @@ const config = require('./config');
 const nonceStore = require('./nonce-store');
 const utils = require('./utils');
 
-const BASIC_REQUEST = 'basic-lti-launch-request';
-
 module.exports = {
   nonceStore: nonceStore.create,
   config: config.get,
@@ -66,6 +64,10 @@ module.exports = {
      * @returns {Promise<admin.database.DataSnapshot>}
      */
     init(req) {
+      if (!req.instructor) {
+        return Promise.reject(new Error('Activities can only be created by users with Instructor role.'));
+      }
+
       const {consumer_key: domain, body: {resource_link_id: linkId}} = req;
 
       if (!utils.isValidKey(domain) || !utils.isValidKey(linkId)) {
@@ -163,6 +165,10 @@ module.exports = {
 };
 
 function newLaunch(req) {
+  if (!req.launch_request) {
+    throw new Error('Not a launch request');
+  }
+
   const domain = req.consumer_key;
   const {
     lti_message_type: messageType,
@@ -170,15 +176,12 @@ function newLaunch(req) {
     resource_link_id: resourceLinkId
   } = req.body;
 
-  if (
-    !messageType ||
-    !version ||
-    !resourceLinkId ||
-    !domain ||
-    !req.instructor ||
-    messageType !== BASIC_REQUEST
-  ) {
-    return;
+  if (!resourceLinkId || !domain) {
+    throw new Error('A launch request should have a resource link id and a consumer key.');
+  }
+
+  if (!messageType || !version) {
+    throw new Error('A launch request should have lti message type and version.');
   }
 
   const custom = Object.keys(req.body)
@@ -192,7 +195,7 @@ function newLaunch(req) {
     custom,
     domain,
     resourceLinkId,
-    contextId: req.body.context_id || null,
+    contextId: req.context_id || null,
     toolConsumerGuid: req.body.tool_consumer_instance_guid || null,
     lti: {messageType, version},
     presentation: {
