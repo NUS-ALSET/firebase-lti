@@ -122,7 +122,7 @@ module.exports = {
       return new Promise((resolve, reject) => {
         const {
           userId,
-          user: isUser,
+          student: isStudent,
           instructor: isInstructor,
           consumer_key: domain
         } = req;
@@ -134,7 +134,7 @@ module.exports = {
         const auth = admin.auth();
         const uid = `${domain}:${userId}`;
 
-        resolve(auth.createCustomToken(uid, {userId, domain, isInstructor, isUser}));
+        resolve(auth.createCustomToken(uid, {userId, domain, isInstructor, isStudent}));
       });
     },
 
