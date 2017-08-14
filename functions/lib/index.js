@@ -7,12 +7,11 @@
 
 'use strict';
 
-const functions = require('firebase-functions');
+const admin = require('firebase-admin');
 
-const server = require('./server');
 const database = require('./database');
+const functions = require('./functions');
 
-exports.server = functions.https.onRequest(server);
+admin.initializeApp(database.config());
 
-exports.verify = functions.database.ref('provider/launches/{consumerKey}/{linkId}/users/{userId}/solution')
-  .onWrite(event => database.launches.gradeSolution(event.data, event.params));
+module.exports = functions;

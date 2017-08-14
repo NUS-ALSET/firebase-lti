@@ -1,54 +1,16 @@
 'use strict';
 
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
-const url = require('url');
-
 const admin = require('firebase-admin');
-const base64 = require('base64url');
-const functions = require('firebase-functions');
 
+const config = require('./config');
 const nonceStore = require('./nonce-store');
 const utils = require('./utils');
 
 const BASIC_REQUEST = 'basic-lti-launch-request';
 
-admin.initializeApp(config());
-
-/**
- * Return configuration for admin client initialization.
- *
- * Simply using `functions.config()` doesn't allow to create auth token; the
- * client needs service account keys.
- *
- * `functions.config()` is uses to find the project name and the lookup the
- * the service account info at `../${projectId}-service-account.json`.
- *
- * @return {object}
- */
-function config() {
-  const databaseURL = functions.config().firebase.databaseURL;
-  const {hostname} = url.parse(databaseURL);
-  const [projectId] = hostname.split('.', 1);
-
-  const jsonPath = path.join(__dirname, `../../${projectId}-service-account.json`);
-  const content = fs.readFileSync(jsonPath, 'utf-8');
-  const serviceAccount = JSON.parse(content);
-
-  return {
-    databaseURL,
-    credential: admin.credential.cert(serviceAccount),
-    databaseAuthVariableOverride: {
-      uid: `functions:${randomString(8)}`,
-      isWorker: true
-    }
-  };
-}
-
 module.exports = {
-
   nonceStore: nonceStore.create,
+  config: config.get,
 
   /**
    * Generate and save oauth1 credentials to firebase.
@@ -59,7 +21,7 @@ module.exports = {
     const db = admin.database();
     const keysRef = db.ref('provider/oauth1');
 
-    const secret = randomString(32);
+    const secret = utils.randomString(32);
     const newKeyRef = keysRef.push();
     const key = newKeyRef.key;
 
@@ -222,10 +184,6 @@ function newLaunch(req) {
       returnURL: req.body.launch_presentation_return_url || null
     }
   };
-}
-
-function randomString(length) {
-  return base64(crypto.randomBytes(length));
 }
 
 function now() {

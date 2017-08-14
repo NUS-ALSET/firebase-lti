@@ -2,6 +2,9 @@
   "name": "functions",
   "description": "Cloud Functions for Firebase",
   "main": "lib/index.js",
+  "scripts": {
+    "test": "mocha test/"
+  },
   "files": [
     "lib/",
     "views/"
@@ -18,5 +21,12 @@
   "private": true,
   "engines": {
     "node": ">=6.0.0"
+  },
+  "devDependencies": {
+    "chai": "^4.1.1",
+    "dirty-chai": "^2.0.1",
+    "mocha": "^3.5.0",
+    "sinon": "^3.1.0",
+    "sinon-chai": "^2.12.0"
   }
 }
