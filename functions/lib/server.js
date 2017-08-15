@@ -43,8 +43,8 @@ exports.create = function (setup = app => app) {
   app.post(launchURL, (req, res, next) => {
     parseLTIReq(req)
       .then(ltiReq => database.launches.getOrCreate(ltiReq).then(snapshot => ({ltiReq, launch: snapshot.val()})))
-      .then(({ltiReq, launch}) => database.launches.authenticate(ltiReq).then(token => ({launch, token})))
-      .then(({launch, token}) => res.render('launch', {token, launch}))
+      .then(({ltiReq, launch}) => database.launches.authenticate(ltiReq).then(token => ({ltiReq, launch, token})))
+      .then(({ltiReq, launch, token}) => res.render('launch', {token, launch, presentation: presentation(ltiReq)}))
       .catch(next);
   });
 
@@ -128,4 +128,15 @@ function validateSignature(req, key, secret) {
       resolve(provider);
     });
   });
+}
+
+function presentation(req) {
+  return {
+    target: req.body.launch_presentation_target || null,
+    local: req.body.launch_presentation_local || null,
+    cssURL: req.body.launch_presentation_css_url || null,
+    width: req.body.launch_presentation_width || null,
+    height: req.body.launch_presentation_height || null,
+    returnURL: req.body.launch_presentation_return_url || null
+  };
 }

@@ -98,14 +98,6 @@ describe('database', function () {
             lti: {
               messageType: 'basic-lti-launch-request',
               version: 'LTI-1p0'
-            },
-            presentation: {
-              target: null,
-              local: null,
-              cssURL: null,
-              width: null,
-              height: null,
-              returnURL: null
             }
           })
         );

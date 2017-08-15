@@ -12,6 +12,8 @@
     <p>Current grade: <meter min="0" max="100" id="grade" value="0">0%</meter>
   </form>
 
+  <p><a href="about:blank" id="returnURL" class="hide">Back to course.</a></p>
+
 <style>
   .hide {
     display: none;
@@ -26,7 +28,8 @@
       main: document.getElementById('main'),
       login: document.getElementById('login'),
       btn: document.getElementById('mainBtn'),
-      grade: document.getElementById('grade')
+      grade: document.getElementById('grade'),
+      returnURL: document.getElementById('returnURL')
     };
 
     try {
@@ -39,6 +42,7 @@
 
     const enable = () => ui.btn.removeAttribute('disabled');
     const disable = () => ui.btn.setAttribute('disabled', 'disabled');
+    const returnURL = {{ json presentation.returnURL }};
     const launch = LTI.launch({
       token: {{json token}},
       domain: {{json launch.domain }},
@@ -47,14 +51,19 @@
       onLoad(err) {
         console.log('loaded', err);
 
-        if(err == null) {
-          ui.loading.classList.add('hide');
-          ui.main.classList.remove('hide');
+        if(err != null) {
+          console.error(err);
+          ui.loading.innerHTML = err.message;
           return;
         }
 
-        console.error(err);
-        ui.loading.innerHTML = err.message;
+        if (returnURL) {
+          ui.returnURL.setAttribute('href', returnURL);
+          ui.returnURL.classList.remove('hide');
+        }
+
+        ui.loading.classList.add('hide');
+        ui.main.classList.remove('hide');
       },
 
       onAuth(user) {
