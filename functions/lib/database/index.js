@@ -58,68 +58,31 @@ module.exports = {
   launches: {
 
     /**
-     * Fetch and create if it doesn't exist the activity info.
+     * Save/update the launch data to the database.
      *
-     * @param {@dinoboff/ims-lti.Provider} req lti request
-     * @returns {Promise<admin.database.DataSnapshot>}
-     */
-    getOrCreate(req) {
-      return req.instructor ? module.exports.launches.init(req) : module.exports.launches.get(req);
-    },
-
-    /**
-     * Fetch or save the activity from the database.
+     * Save the outcome service data; the service url is suppose to be mostly
+     * stable but the use "result_sourcedid" from one user might change
+     * between each of her requests.
      *
      * @param {@dinoboff/ims-lti.Provider} req lti request
      * @returns {Promise<admin.database.DataSnapshot>}
      */
     init(req) {
-      if (!req.instructor) {
-        return Promise.reject(new Error('Activities can only be created by users with Instructor role.'));
-      }
-
       const {consumer_key: domain, body: {resource_link_id: linkId}} = req;
 
-      if (!utils.isValidKey(domain) || !utils.isValidKey(linkId)) {
-        return Promise.reject(new Error(`"${domain}/${linkId}" is a valid path for firebase.`));
-      }
+      return new Promise(resolve => {
+        const db = admin.database();
 
-      const db = admin.database();
-      const ref = db.ref(`provider/launches/${domain}/${linkId}/info`);
+        resolve(db.ref(`provider/launches/${domain}/${linkId}`));
+      }).then(
+        ref => ref.update({
+          info: launch(req),
+          [`users/${uid(req)}/resultSourceDid`]: sourceDid(req)
+        }).then(
+          () => ref.child('info').once('value')
+        )
+      );
 
-      return ref.transaction(launch => {
-        if (launch != null) {
-          return;
-        }
-
-        return newLaunch(req);
-      }).then(({snapshot}) => {
-        if (!snapshot.exists()) {
-          return Promise.reject(new Error('Failed to the create activity.'));
-        }
-
-        return snapshot;
-      });
-    },
-
-    /**
-     * Fetch the launch info.
-     *
-     * @param {@dinoboff/ims-lti.Provider} req lti request
-     * @returns {Promise<admin.database.DataSnapshot>}
-     */
-    get(req) {
-      const {consumer_key: domain, body: {resource_link_id: linkId}} = req;
-      const db = admin.database();
-      const ref = db.ref(`provider/launches/${domain}/${linkId}/info`);
-
-      return ref.once('value').then(snapshot => {
-        if (!snapshot.exists()) {
-          return Promise.reject(new Error(`No activity at "${ref.toString()}"`));
-        }
-
-        return snapshot;
-      });
     },
 
     /**
@@ -129,22 +92,15 @@ module.exports = {
      * @returns {Promise<string>}
      */
     authenticate(req) {
-      return new Promise((resolve, reject) => {
+      return new Promise(resolve => {
         const {
-          userId,
           student: isStudent,
-          instructor: isInstructor,
-          consumer_key: domain
+          instructor: isInstructor
         } = req;
 
-        if (!userId || !domain) {
-          return reject(new Error('Users can only register for activity if they have "user" role.'));
-        }
-
         const auth = admin.auth();
-        const uid = `${domain}:${userId}`;
 
-        resolve(auth.createCustomToken(uid, {userId, domain, isInstructor, isStudent}));
+        resolve(auth.createCustomToken(uid(req), {isInstructor, isStudent}));
       });
     },
 
@@ -174,7 +130,7 @@ module.exports = {
 
 };
 
-function newLaunch(req) {
+function launch(req) {
   if (!req.launch_request) {
     throw new Error('Not a launch request');
   }
@@ -194,21 +150,47 @@ function newLaunch(req) {
     throw new Error('A launch request should have lti message type and version.');
   }
 
-  const custom = Object.keys(req.body)
-    .filter(k => k.startsWith('custom_'))
-    .reduce((result, k) => {
-      result[k.slice(7)] = req.body[k];
-      return result;
-    }, {});
-
   return {
-    custom,
     domain,
     resourceLinkId,
     contextId: req.context_id || null,
     toolConsumerGuid: req.body.tool_consumer_instance_guid || null,
-    lti: {messageType, version}
+    lti: {messageType, version},
+    outcomeService: outcomeService(req)
   };
+}
+
+function uid(req) {
+  const {
+    userId,
+    consumer_key: domain
+  } = req;
+
+  if (!userId || !domain) {
+    throw new Error('Users can only register for activity if they have "user" role.');
+  }
+
+  return `${domain}:${userId}`;
+}
+
+function outcomeService(req) {
+  if (!req.outcome_service) {
+    return null;
+  }
+
+  const {service_url: serviceURL, result_data_types: types} = req.outcome_service;
+
+  return {
+    serviceURL,
+    resultDataType: types.reduce(
+      (acc, type) => Object.assign(acc, {[type]: true}),
+      {}
+    )
+  };
+}
+
+function sourceDid(req) {
+  return req.outcome_service == null ? null : req.outcome_service.source_did;
 }
 
 function now() {

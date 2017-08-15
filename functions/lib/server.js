@@ -42,7 +42,7 @@ exports.create = function (setup = app => app) {
 
   app.post(launchURL, (req, res, next) => {
     parseLTIReq(req)
-      .then(ltiReq => database.launches.getOrCreate(ltiReq).then(snapshot => ({ltiReq, launch: snapshot.val()})))
+      .then(ltiReq => database.launches.init(ltiReq).then(snapshot => ({ltiReq, launch: snapshot.val()})))
       .then(({ltiReq, launch}) => database.launches.authenticate(ltiReq).then(token => ({ltiReq, launch, token})))
       .then(({ltiReq, launch, token}) => res.render('launch', {token, launch, presentation: presentation(ltiReq)}))
       .catch(next);

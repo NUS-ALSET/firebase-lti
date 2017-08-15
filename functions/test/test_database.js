@@ -22,39 +22,8 @@ describe('database', function () {
 
   describe('launches', function () {
 
-    describe('getOrCreate', function () {
-
-      beforeEach(function () {
-        sinon.stub(database.launches, 'get');
-        sinon.stub(database.launches, 'init');
-      });
-
-      afterEach(function () {
-        database.launches.get.restore();
-        database.launches.init.restore();
-      });
-
-      it('should save the info the user has the instructor role', function () {
-        const req = {instructor: true};
-
-        database.launches.getOrCreate(req);
-        expect(database.launches.init).to.have.been.calledOnce();
-        expect(database.launches.init).to.have.been.calledWithExactly(req);
-      });
-
-      it('should only fetch the info the user has the instructor role', function () {
-        const req = {instructor: false};
-
-        database.launches.getOrCreate(req);
-        expect(database.launches.init).to.not.have.been.calledOnce();
-        expect(database.launches.get).to.have.been.calledOnce();
-        expect(database.launches.get).to.have.been.calledWithExactly(req);
-      });
-
-    });
-
     describe('init', function () {
-      let req, ref, snapshot;
+      let req, ref, childRef, snapshot;
 
       beforeEach(function () {
         req = {
@@ -62,6 +31,7 @@ describe('database', function () {
           consumer_key: 'foo',
           instructor: true,
           context_id: 'baz',
+          userId: 'someUser',
           body: {
             resource_link_id: 'bar',
             lti_message_type: 'basic-lti-launch-request',
@@ -70,57 +40,41 @@ describe('database', function () {
           }
         };
 
-        snapshot = {exists: sinon.stub().returns(true)};
+        snapshot = {};
+        childRef = {
+          once: sinon.stub().returns(Promise.resolve(snapshot))
+        };
         ref = {
-          transaction: sinon.stub()
-            .returns(Promise.resolve({snapshot, committed: true}))
+          update: sinon.stub().returns(Promise.resolve({})),
+          child: sinon.stub().withArgs('info').returns(childRef)
         };
 
         db.ref.returns(ref);
       });
 
-      it('should save request info if they do not exist', function () {
+      it('should save request info', function () {
         return database.launches.init(req).then(result => {
           expect(result).to.equal(snapshot);
+
           expect(db.ref).to.have.been.calledOnce();
-          expect(db.ref).to.have.been.calledWithExactly('provider/launches/foo/bar/info');
-          expect(ref.transaction).to.have.been.calledOnce();
-          expect(ref.transaction).to.have.been.calledWith(sinon.match.func);
+          expect(db.ref).to.have.been.calledWithExactly('provider/launches/foo/bar');
 
-          return ref.transaction.lastCall.args[0];
-        }).then(
-          txHandler => expect(txHandler(null)).to.eql({
-            custom: {},
-            domain: 'foo',
-            resourceLinkId: 'bar',
-            contextId: 'baz',
-            toolConsumerGuid: 'someTC',
-            lti: {
-              messageType: 'basic-lti-launch-request',
-              version: 'LTI-1p0'
-            }
-          })
-        );
-      });
-
-      it('should not save the info if it already exists', function () {
-        return database.launches.init(req).then(() => {
-          expect(ref.transaction).to.have.been.calledOnce();
-          expect(ref.transaction).to.have.been.calledWith(sinon.match.func);
-
-          return ref.transaction.lastCall.args[0];
-        }).then(
-          txHandler => expect(txHandler({})).to.be.undefined()
-        );
-      });
-
-      it('should reject if the user is not an instructor', function () {
-        delete req.instructor;
-
-        return database.launches.init(req).then(
-          () => Promise.reject(new Error('inspected')),
-          () => {}
-        );
+          expect(ref.update).to.have.been.calledOnce();
+          expect(ref.update).to.have.been.calledWith({
+            info: {
+              domain: 'foo',
+              resourceLinkId: 'bar',
+              contextId: 'baz',
+              toolConsumerGuid: 'someTC',
+              lti: {
+                messageType: 'basic-lti-launch-request',
+                version: 'LTI-1p0'
+              },
+              outcomeService: null
+            },
+            'users/foo:someUser/resultSourceDid': null
+          });
+        });
       });
 
       it('should reject if the consumer key is missing', function () {
@@ -144,58 +98,17 @@ describe('database', function () {
       it('should reject if the lti version is missing', function () {
         delete req.body.lti_version;
 
-        return database.launches.init(req).then(() => {
-          expect(ref.transaction).to.have.been.calledOnce();
-          expect(ref.transaction).to.have.been.calledWith(sinon.match.func);
-
-          return ref.transaction.lastCall.args[0];
-        }).then(
-          txHandler => expect(() => txHandler(null)).to.throw()
+        return database.launches.init(req).then(
+          () => Promise.reject(new Error('inspected')),
+          () => {}
         );
       });
 
       it('should reject if the lti message type is missing', function () {
         delete req.body.lti_message_type;
 
-        return database.launches.init(req).then(() => {
-          expect(ref.transaction).to.have.been.calledOnce();
-          expect(ref.transaction).to.have.been.calledWith(sinon.match.func);
-
-          return ref.transaction.lastCall.args[0];
-        }).then(
-          txHandler => expect(() => txHandler(null)).to.throw()
-        );
-      });
-
-    });
-
-    describe('get', function () {
-
-      it('should fetch the launch info', function () {
-        const snapshot = {exists: sinon.stub().returns(true)};
-        const ref = {once: sinon.stub()};
-        const req = {consumer_key: 'foo', body: {resource_link_id: 'bar'}};
-
-        db.ref.returns(ref);
-        ref.once.withArgs('value').returns(Promise.resolve(snapshot));
-
-        return database.launches.get(req).then(result => {
-          expect(result).to.equal(snapshot);
-          expect(db.ref).to.have.been.calledOnce();
-          expect(db.ref).to.have.been.calledWithExactly('provider/launches/foo/bar/info');
-        });
-      });
-
-      it('should reject if the info are missing', function () {
-        const snapshot = {exists: sinon.stub().returns(false)};
-        const ref = {once: sinon.stub()};
-        const req = {consumer_key: 'foo', body: {resource_link_id: 'bar'}};
-
-        db.ref.returns(ref);
-        ref.once.withArgs('value').returns(Promise.resolve(snapshot));
-
-        return database.launches.get(req).then(
-          () => Promise.reject(new Error('unexpected')),
+        return database.launches.init(req).then(
+          () => Promise.reject(new Error('inspected')),
           () => {}
         );
       });
