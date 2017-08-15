@@ -12,6 +12,7 @@
   "dependencies": {
     "@dinoboff/ims-lti": "^3.1.0-rc1",
     "base64url": "^2.0.0",
+    "body-parser": "^1.17.2",
     "express": "^4.15.3",
     "express-handlebars": "^3.0.0",
     "firebase-admin": "~4.2.1",
@@ -26,7 +27,9 @@
     "chai": "^4.1.1",
     "dirty-chai": "^2.0.1",
     "mocha": "^3.5.0",
+    "oauth-signature": "^1.3.1",
     "sinon": "^3.1.0",
-    "sinon-chai": "^2.12.0"
+    "sinon-chai": "^2.12.0",
+    "supertest": "^3.0.0"
   }
 }

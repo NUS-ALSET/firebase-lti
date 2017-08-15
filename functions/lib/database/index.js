@@ -6,8 +6,6 @@ const config = require('./config');
 const nonceStore = require('./nonce-store');
 const utils = require('./utils');
 
-const BASIC_REQUEST = 'basic-lti-launch-request';
-
 module.exports = {
   nonceStore: nonceStore.create,
   config: config.get,
@@ -60,12 +58,26 @@ module.exports = {
   launches: {
 
     /**
+     * Fetch and create if it doesn't exist the activity info.
+     *
+     * @param {@dinoboff/ims-lti.Provider} req lti request
+     * @returns {Promise<admin.database.DataSnapshot>}
+     */
+    getOrCreate(req) {
+      return req.instructor ? module.exports.launches.init(req) : module.exports.launches.get(req);
+    },
+
+    /**
      * Fetch or save the activity from the database.
      *
      * @param {@dinoboff/ims-lti.Provider} req lti request
      * @returns {Promise<admin.database.DataSnapshot>}
      */
     init(req) {
+      if (!req.instructor) {
+        return Promise.reject(new Error('Activities can only be created by users with Instructor role.'));
+      }
+
       const {consumer_key: domain, body: {resource_link_id: linkId}} = req;
 
       if (!utils.isValidKey(domain) || !utils.isValidKey(linkId)) {
@@ -91,6 +103,26 @@ module.exports = {
     },
 
     /**
+     * Fetch the launch info.
+     *
+     * @param {@dinoboff/ims-lti.Provider} req lti request
+     * @returns {Promise<admin.database.DataSnapshot>}
+     */
+    get(req) {
+      const {consumer_key: domain, body: {resource_link_id: linkId}} = req;
+      const db = admin.database();
+      const ref = db.ref(`provider/launches/${domain}/${linkId}/info`);
+
+      return ref.once('value').then(snapshot => {
+        if (!snapshot.exists()) {
+          return Promise.reject(new Error(`No activity at "${ref.toString()}"`));
+        }
+
+        return snapshot;
+      });
+    },
+
+    /**
      * Create auth token for the lti user.
      *
      * @param {@dinoboff/ims-lti.Provider} req lti request
@@ -100,7 +132,7 @@ module.exports = {
       return new Promise((resolve, reject) => {
         const {
           userId,
-          user: isUser,
+          student: isStudent,
           instructor: isInstructor,
           consumer_key: domain
         } = req;
@@ -112,7 +144,7 @@ module.exports = {
         const auth = admin.auth();
         const uid = `${domain}:${userId}`;
 
-        resolve(auth.createCustomToken(uid, {userId, domain, isInstructor, isUser}));
+        resolve(auth.createCustomToken(uid, {userId, domain, isInstructor, isStudent}));
       });
     },
 
@@ -143,6 +175,10 @@ module.exports = {
 };
 
 function newLaunch(req) {
+  if (!req.launch_request) {
+    throw new Error('Not a launch request');
+  }
+
   const domain = req.consumer_key;
   const {
     lti_message_type: messageType,
@@ -150,15 +186,12 @@ function newLaunch(req) {
     resource_link_id: resourceLinkId
   } = req.body;
 
-  if (
-    !messageType ||
-    !version ||
-    !resourceLinkId ||
-    !domain ||
-    !req.instructor ||
-    messageType !== BASIC_REQUEST
-  ) {
-    return;
+  if (!resourceLinkId || !domain) {
+    throw new Error('A launch request should have a resource link id and a consumer key.');
+  }
+
+  if (!messageType || !version) {
+    throw new Error('A launch request should have lti message type and version.');
   }
 
   const custom = Object.keys(req.body)
@@ -172,7 +205,7 @@ function newLaunch(req) {
     custom,
     domain,
     resourceLinkId,
-    contextId: req.body.context_id || null,
+    contextId: req.context_id || null,
     toolConsumerGuid: req.body.tool_consumer_instance_guid || null,
     lti: {messageType, version},
     presentation: {
