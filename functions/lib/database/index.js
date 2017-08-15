@@ -58,6 +58,16 @@ module.exports = {
   launches: {
 
     /**
+     * Fetch and create if it doesn't exist the activity info.
+     *
+     * @param {@dinoboff/ims-lti.Provider} req lti request
+     * @returns {Promise<admin.database.DataSnapshot>}
+     */
+    getOrCreate(req) {
+      return req.instructor ? module.exports.launches.init(req) : module.exports.launches.get(req);
+    },
+
+    /**
      * Fetch or save the activity from the database.
      *
      * @param {@dinoboff/ims-lti.Provider} req lti request

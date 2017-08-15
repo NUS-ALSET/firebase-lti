@@ -8,39 +8,48 @@ const _HmacSha1 = require('@dinoboff/ims-lti/lib/hmac-sha1');
 
 const database = require('./database');
 
-const app = express();
 const launchURL = '/lti/launch';
 const LTI_CONTENT_TYPES = {
   'application/x-www-form-urlencoded': true
 };
 
-app.engine('handlebars', exphbs({
-  defaultLayout: 'main',
-  helpers: {
-    json: data => new handlebars.SafeString(JSON.stringify(data))
-  }
-}));
-app.set('view engine', 'handlebars');
+/**
+ * Create a LTI request handler.
+ *
+ * @param {function(express.Application)} setup Function to register extra middleware
+ * @returns {express.Application}
+ */
+exports.create = function (setup = app => app) {
+  const app = setup(express());
 
-app.get(['/', '/lti/'], (req, res) => res.render('index'));
-app.post('/lti/credentials', (req, res, next) => {
-  database.newCredentials()
-    .then(credentials => res.render(
-      'credentials',
-      Object.assign(credentials, {launchURL})
-    ))
-    .catch(next);
-});
+  app.engine('handlebars', exphbs({
+    defaultLayout: 'main',
+    helpers: {
+      json: data => new handlebars.SafeString(JSON.stringify(data))
+    }
+  }));
+  app.set('view engine', 'handlebars');
 
-app.post(launchURL, (req, res, next) => {
-  parseLTIReq(req)
-    .then(ltiReq => database.launches.init(ltiReq).then(snapshot => ({ltiReq, launch: snapshot.val()})))
-    .then(({ltiReq, launch}) => database.launches.authenticate(ltiReq).then(token => ({launch, token})))
-    .then(({launch, token}) => res.render('launch', {token, launch}))
-    .catch(next);
-});
+  app.get(['/', '/lti/'], (req, res) => res.render('index'));
+  app.post('/lti/credentials', (req, res, next) => {
+    database.newCredentials()
+      .then(credentials => res.render(
+        'credentials',
+        Object.assign(credentials, {launchURL})
+      ))
+      .catch(next);
+  });
 
-module.exports = app;
+  app.post(launchURL, (req, res, next) => {
+    parseLTIReq(req)
+      .then(ltiReq => database.launches.getOrCreate(ltiReq).then(snapshot => ({ltiReq, launch: snapshot.val()})))
+      .then(({ltiReq, launch}) => database.launches.authenticate(ltiReq).then(token => ({launch, token})))
+      .then(({launch, token}) => res.render('launch', {token, launch}))
+      .catch(next);
+  });
+
+  return app;
+};
 
 class HmacSha1 extends _HmacSha1 {
 

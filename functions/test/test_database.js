@@ -22,6 +22,37 @@ describe('database', function () {
 
   describe('launches', function () {
 
+    describe('getOrCreate', function () {
+
+      beforeEach(function () {
+        sinon.stub(database.launches, 'get');
+        sinon.stub(database.launches, 'init');
+      });
+
+      afterEach(function () {
+        database.launches.get.restore();
+        database.launches.init.restore();
+      });
+
+      it('should save the info the user has the instructor role', function () {
+        const req = {instructor: true};
+
+        database.launches.getOrCreate(req);
+        expect(database.launches.init).to.have.been.calledOnce();
+        expect(database.launches.init).to.have.been.calledWithExactly(req);
+      });
+
+      it('should only fetch the info the user has the instructor role', function () {
+        const req = {instructor: false};
+
+        database.launches.getOrCreate(req);
+        expect(database.launches.init).to.not.have.been.calledOnce();
+        expect(database.launches.get).to.have.been.calledOnce();
+        expect(database.launches.get).to.have.been.calledWithExactly(req);
+      });
+
+    });
+
     describe('init', function () {
       let req, ref, snapshot;
 
