@@ -115,6 +115,35 @@ describe('database', function () {
 
     });
 
+    describe('gradeSolution', function () {
+
+      [
+        {exists: true, grade: 100},
+        {exists: false, grade: 0}
+      ].forEach(function (test) {
+        it(`should set the user grade to ${test.grade} if the solution ${test.exists ? '' : 'does not'} exist`, function () {
+          const solution = {exists: sinon.stub().returns(test.exists)};
+          const params = {
+            consumerKey: 'someKey',
+            linkId: 'someResource',
+            userId: 'someKey:someUser'
+          };
+          const ref = {set: sinon.stub().returns(Promise.resolve())};
+
+          db.ref.returns(ref);
+
+          return database.launches.gradeSolution(solution, params).then(() => {
+            expect(db.ref).to.have.been.calledOnce();
+            expect(db.ref).to.have.been.calledWithExactly('provider/launches/someKey/someResource/users/someKey:someUser/grade');
+
+            expect(ref.set).to.have.been.calledOnce();
+            expect(ref.set).to.have.been.calledWithExactly(test.grade);
+          });
+        });
+      });
+
+    });
+
   });
 
 });
