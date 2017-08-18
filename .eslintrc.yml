@@ -23,6 +23,7 @@ rules:
     - warn
   no-confusing-arrow:
     - error
+    - allowParens: true
   no-eq-null:
     - "off"
   strict:
