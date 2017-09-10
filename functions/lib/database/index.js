@@ -1,6 +1,7 @@
 'use strict';
 
 const admin = require('firebase-admin');
+const uuid = require('uuid/v4');
 
 const config = require('./config');
 const nonceStore = require('./nonce-store');
@@ -20,10 +21,9 @@ module.exports = {
     const keysRef = db.ref('provider/oauth1');
 
     const secret = utils.randomString(32);
-    const newKeyRef = keysRef.push();
-    const key = newKeyRef.key;
+    const key = uuid();
 
-    return newKeyRef.child('credentials')
+    return keysRef.child(`${key}/credentials`)
       .set({key, secret, createdAt: now()})
       .then(() => ({key, secret}));
   },

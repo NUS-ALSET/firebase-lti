@@ -35,8 +35,7 @@ class HmacSha1 extends _HmacSha1 {
  */
 exports.parseLaunchReq = function (req) {
   return new Promise(resolve => {
-    const domain = supportedReq(req);
-    const key = domain.startsWith('lti') ? domain.slice(3) : domain;
+    const key = supportedReq(req);
 
     resolve(database.getCredentials(key));
   }).then(({key, secret}) => validateSignature(req, key, secret));
