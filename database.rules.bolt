@@ -33,10 +33,21 @@ path /provider {
 
       /grade is Number;
 
-      /resultSourceDid is String;
+      /sourceDid is String;
+
+      /outcomeTask is String;
 
     }
 
+  }
+
+  /outcomes/queue {
+    index() { ['started', 'startedAt'] }
+    read() { isWorker() }
+
+    /{taskId} is Task<OutcomeRequest> {
+      write() { isWorker() }
+    }
   }
 
 }
@@ -44,7 +55,7 @@ path /provider {
 type OauthKey {
   key: String;
   secret: String;
-  createdAt: InitialTimestamp;
+  createdAt: InitialTimestamp | Null;
 }
 
 type Activity {
@@ -62,8 +73,18 @@ type LTI {
 }
 
 type OutcomeService {
-  serviceURL: String | Null;
-  resultDataType: Boolean[] | Null;
+  url: String | Null;
+  dataType: Boolean[] | Null;
+}
+
+type OutcomeRequest {
+  // We do not denormalise the user source_did or grade because we need to
+  // load the user data anyway (to check the task still need to run).
+  consumerKey: String;
+  linkId: String;
+  userId: String;
+  service: OutcomeService;
+  consumer: OauthKey;
 }
 
 type CurrentTimestamp extends Number {
@@ -74,7 +95,25 @@ type InitialTimestamp extends Number {
   validate() { initial(this, now) }
 }
 
-initial(value, init) { value == (prior(value) == null ? init : prior(value)) }
+type Task<T> extends T {
+  started: Boolean;
+  createdAt: InitialTimestamp;
+  startedAt: Number | Null;
+
+  validate() {
+    this.startedAt == prior(this.startedAt)
+    || (
+      (this.startedAt == now || this.startedAt == null)
+      && (isNew(this.startedAt) || timedOut(this.startedAt, 20000))
+    )
+  }
+}
+
+isNew(value) { prior(value) == null }
+
+initial(value, init) { value == (isNew(value) ? init : prior(value)) }
+
+timedOut(value, delta) { prior(value) < (now - delta) }
 
 isWorker() { auth != null && auth.isWorker == true }
 
