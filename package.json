@@ -5,6 +5,7 @@
   "main": "index.js",
   "files": [
     "public/",
+    "functions/bin/",
     "functions/lib/",
     "functions/views/",
     "functions/package.json",

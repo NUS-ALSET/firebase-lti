@@ -4,8 +4,11 @@
 
 'use strict';
 
-const lti = require('@dinoboff/ims-lti');
 const _HmacSha1 = require('@dinoboff/ims-lti/lib/hmac-sha1');
+const crypto = require('crypto');
+const got = require('got');
+const lti = require('@dinoboff/ims-lti');
+const OAuth = require('oauth-1.0a');
 
 const database = require('./database');
 
@@ -58,6 +61,28 @@ exports.presentation = function (provider) {
   };
 };
 
+exports.sendOutcome = function ({sourceDid, outcome, url, consumer, timer}) {
+  const Outcomes = lti.Extensions.Outcomes;
+  const body = Outcomes.OutcomeDocument
+    .replace(sourceDid, outcome)
+    .finalize();
+  const request = postOBH({url, body, consumer}).then(res => new Promise((resolve, reject) => Outcomes.parseResponse(res.body, (err, ok) => {
+    if (err) {
+      reject(err);
+    } else if (ok) {
+      resolve();
+    } else {
+      reject(new Error(`Failed to replace outcome.`));
+    }
+  })));
+
+  if (timer) {
+    timer.then(() => request.cancel());
+  }
+
+  return request;
+};
+
 function supportedReq(req) {
   const {
     headers: {'content-type': enc},
@@ -107,4 +132,34 @@ function validateSignature(req, key, secret) {
       resolve(provider);
     });
   });
+}
+
+function postOBH({url, body, consumer, contentType = 'application/xml'}) {
+  /* eslint-disable camelcase */
+  const oauth = new OAuth({
+    consumer,
+    signature_method: 'HMAC-SHA1',
+    hash_function: hmacSha1,
+    body_hash_function: sha1
+  });
+  /* eslint-enable camelcase */
+  const oauthData = oauth.authorize({
+    url,
+    data: body,
+    method: 'POST',
+    includeBodyHash: true
+  });
+  const headers = Object.assign(oauth.toHeader(oauthData), {
+    'content-type': contentType
+  });
+
+  return got.post(url, {headers, body, retries: 0});
+}
+
+function hmacSha1(baseString, key) {
+  return crypto.createHmac('sha1', key).update(baseString).digest('base64');
+}
+
+function sha1(data) {
+  return crypto.createHash('sha1').update(data).digest('base64');
 }

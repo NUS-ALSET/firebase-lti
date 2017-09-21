@@ -6,11 +6,12 @@
     "test": "mocha test/"
   },
   "files": [
+    "bin/",
     "lib/",
     "views/"
   ],
   "dependencies": {
-    "@dinoboff/ims-lti": "^3.1.0-rc1",
+    "@dinoboff/ims-lti": "^3.1.0-rc7",
     "base64url": "^2.0.0",
     "body-parser": "^1.17.2",
     "debug": "^3.0.1",
@@ -18,8 +19,11 @@
     "express-handlebars": "^3.0.0",
     "firebase-admin": "~4.2.1",
     "firebase-functions": "^0.5.7",
+    "got": "^7.1.0",
     "handlebars": "^4.0.10",
     "lodash.once": "^4.1.1",
+    "minimist": "^1.2.0",
+    "oauth-1.0a": "git+https://github.com/dinoboff/oauth-1.0a.git#fix/obh",
     "uuid": "^3.1.0"
   },
   "private": true,
