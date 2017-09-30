@@ -80,6 +80,18 @@ describe('promise', function () {
       return promise.timer(50).then(() => expect(Date.now() - t1).to.be.greaterThan(49));
     });
 
+    it('should reject token is cancelled before the delay (1/2)', function () {
+      const cancelable = new cancellation.TimedTokenSource(10);
+
+      return promise.timer(50, cancelable.token).then(unexpected, e => expect(e).to.match(/cancell?ed/i));
+    });
+
+    it('should reject token is cancelled before the delay (2/2)', function () {
+      const token = cancellation.Token.canceled;
+
+      return promise.timer(50, token).then(unexpected, e => expect(e).to.match(/cancell?ed/i));
+    });
+
   });
 
   describe('never', function () {

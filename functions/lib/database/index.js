@@ -199,6 +199,7 @@ const database = {
        *
        * @param {function(object): Promise<void>} outcomeHandler Function sending the the outcome
        * @param {object} options Options
+       * @param {CancellationToken} options.cancelToken Token signaling the queue should close
        * @param {number} options.size Concurrent task limit
        * @param {object} options.timeOut Time out options
        * @param {number} options.timeOut.job Time out for a job
@@ -207,11 +208,8 @@ const database = {
        * @returns {{running: Promise<void>, stop: function(): Promise<void>}}
        */
       process(outcomeHandler, options = {}) {
-        const processor = (taskId, task, timer) => database.launches.outcomes.request(taskId, task).then(req => {
-          req.timer = timer;
-
-          return outcomeHandler(req);
-        });
+        const processor = (taskId, task, cancelToken) => database.launches.outcomes.request(taskId, task, cancelToken)
+          .then(outcomeHandler);
 
         options.path = 'provider/outcomes/queue';
 
@@ -275,9 +273,10 @@ const database = {
        *
        * @param {string} taskId Task id (must be the current task for the user)
        * @param {object} task Task definition
+       * @param {CancellationToken} cancelToken Token notifying processing cancellation
        * @returns {Promise<object?>}
        */
-      request(taskId, {consumerKey, linkId, userId, service, consumer}) {
+      request(taskId, {consumerKey, linkId, userId, service, consumer}, cancelToken) {
         return database.launches.getUser(consumerKey, linkId, userId).then(user => {
           if (user == null) {
             return;
@@ -294,6 +293,7 @@ const database = {
             url,
             consumer,
             sourceDid,
+            cancelToken,
             outcome: {
               score: grade == null ? 0 : grade / 100
             }

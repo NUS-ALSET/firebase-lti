@@ -24,6 +24,7 @@
     "lodash.once": "^4.1.1",
     "minimist": "^1.2.0",
     "oauth-1.0a": "git+https://github.com/dinoboff/oauth-1.0a.git#fix/obh",
+    "prex": "^0.3.0",
     "uuid": "^3.1.0"
   },
   "private": true,

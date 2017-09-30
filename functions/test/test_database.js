@@ -493,6 +493,7 @@ describe('database', function () {
           score = () => 1,
           sourceDid = () => 'someSourceDid',
           outcomeTask = () => taskId,
+          cancelToken = () => ({}),
           user = () => ({
             grade: grade(),
             sourceDid: sourceDid(),
@@ -502,13 +503,16 @@ describe('database', function () {
             sourceDid: 'someSourceDid',
             outcome: {score: score()},
             url: 'http://example.com',
+            cancelToken: cancelToken(),
             consumer: {key: 'someDomain', secret: 'someSecret'}
           })
         }) {
           it(desc, function () {
+            const token = cancelToken();
+
             database.launches.getUser.withArgs(consumerKey, linkId, userId).resolves(user());
 
-            return database.launches.outcomes.request(taskId, task).then(req => {
+            return database.launches.outcomes.request(taskId, task, token).then(req => {
               expect(req).to.eql(expected());
             });
           });
@@ -547,15 +551,14 @@ describe('database', function () {
           const [processor] = queue.create.lastCall.args;
           const taskId = 'someTaskId';
           const task = {some: 'task'};
-          const timer = {some: 'timer'};
+          const cancelToken = {some: 'token'};
           const req = {some: 'req'};
 
-          database.launches.outcomes.request.resolves(req);
+          database.launches.outcomes.request.withArgs(taskId, task, cancelToken).resolves(req);
 
-          return processor(taskId, task, timer).then(() => {
+          return processor(taskId, task, cancelToken).then(() => {
             expect(handler).to.have.been.calledOnce();
             expect(handler).to.have.been.calledWithExactly(req);
-            expect(req.timer).to.equal(timer);
           });
         });
 

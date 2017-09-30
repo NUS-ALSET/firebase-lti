@@ -3,9 +3,9 @@
 const admin = require('firebase-admin');
 const debug = require('debug');
 const uuid = require('uuid/v4');
-const once = require('lodash.once');
 
 const promise = require('../promise');
+const cancellation = require('../cancellation');
 
 const noop = () => {};
 const logger = (id, {type = 'worker', level = 'info'} = {}) => debug(`firebase-lti:database:queue:${type}:${id}:${level}`);
@@ -25,44 +25,46 @@ promise.shim();
  * @param {object} options Pool options
  * @param {number} options.size Pool maximum size
  * @param {string} options.path Firebase database Path to the tasks to run
+ * @param {CancellationToken} options.cancelToken Token signaling the queue should close
  * @param {{job: number, idle: number, retry: number}} options.timeOut Delays for task, idled worker and retry timers
- * @returns {{running: Promise<void>, stop: function(): Promise<void>}}
+ * @returns {Promise<void>}
  */
 exports.create = function (processor, options = {}) {
   const log = logger(uuid(), {type: 'master'});
-  const error = logger(uuid(), {type: 'master', level: 'error'});
-  const {size = exports.POOL_SIZE, path = exports.QUEUE_PATH} = options;
+  const {
+    size = exports.POOL_SIZE,
+    path = exports.QUEUE_PATH,
+    cancelToken = cancellation.Token.none
+  } = options;
+  const cancelable = new cancellation.TokenSource([cancelToken]);
+
+  if (cancelable.token.cancellationRequested) {
+    return Promise.resolve();
+  }
 
   log(`Starting monitoring queue at <${path}> with up to ${size} workers`);
 
-  const {ctx, cancel} = exports.Context.create();
+  const ctx = new exports.Context({cancelToken: cancelable.token});
   const cleaner = new exports.Cleaner(ctx, options);
   const addWorker = () => {
     const worker = new exports.Worker(ctx, processor, options);
 
-    worker.start();
+    worker.start().catch(console.error);
   };
   const unsubscribe = ctx.subscribe(({pool, idle}) => ((idle < 1 && pool < size) ? addWorker() : null));
-  const running = promise.deferrer();
-  const stop = once(() => {
-    unsubscribe();
-
-    return cancel().then(running.resolve);
-  });
 
   addWorker();
-  cleaner.start().catch(stop);
+  cleaner.start()
+    .catch(console.error)
+    .finally(() => cancelable.cancel());
 
-  return {
-    stop,
-    running: running.promise.then(
-      () => log(`stopped monitoring <${path}>.`),
-      err => {
-        error(`monitoring <${path}> failed: ${err}`);
+  cancelable.token.register(() => {
+    log(`Stopping monitoring queue at <${path}>.`);
+    unsubscribe();
+  });
 
-        return Promise.reject(err);
-      }
-    )};
+  return ctx.closed()
+    .finally(() => cancelable.close());
 };
 
 /**
@@ -73,46 +75,17 @@ exports.create = function (processor, options = {}) {
 exports.Context = class Context {
 
   /**
-   * Create a Context a cancellation handler for it.
-   *
-   * @param {{timeOut: number}} options Context options
-   * @returns {{ctx: Context, cancel: function(): void}}
-   */
-  static create() {
-    const defer = promise.deferrer();
-    const ctx = new exports.Context({done: defer.promise});
-
-    return {
-      ctx,
-
-      cancel: once(() => {
-        defer.resolve();
-
-        return new Promise(resolve => {
-          if (!ctx.hasWorker()) {
-            resolve();
-
-            return;
-          }
-
-          ctx.subscribe(() => (ctx.hasWorker() ? null : resolve()));
-        });
-      })
-    };
-  }
-
-  /**
    * Queue Context constructor.
    *
    * @param {object} options Context options
    * @param {Promise<void>} options.done Resolves when the pool should shutdown
    * @param {number} options.timeOut delay before the pool should shutdown
    */
-  constructor({done = promise.never()}) {
+  constructor({cancelToken = cancellation.Token.none}) {
     this._pool = new Map();
     this._idle = new Map();
     this._listeners = [];
-    this._shutdown = done;
+    this.cancelToken = cancelToken;
   }
 
   /**
@@ -147,6 +120,15 @@ exports.Context = class Context {
     const {pool, idle} = this.size();
 
     return pool > 0 && idle < pool;
+  }
+
+  /**
+   * Test if the pool is running.
+   *
+   * @returns {boolean}
+   */
+  isClosed() {
+    return this.cancelToken.cancellationRequested && !this.hasWorker();
   }
 
   /**
@@ -194,12 +176,23 @@ exports.Context = class Context {
   }
 
   /**
-   * Notify workers they should shutdown.
+   * Resolves once the pool is closed and empty.
    *
    * @returns {Promise<void>}
    */
-  closing() {
-    return this._shutdown;
+  closed() {
+    return new Promise(resolve => {
+      if (this.isClosed()) {
+        resolve();
+        return;
+      }
+
+      this.subscribe(() => {
+        if (this.isClosed()) {
+          resolve();
+        }
+      });
+    });
   }
 
   /**
@@ -211,6 +204,10 @@ exports.Context = class Context {
    * @returns {function(): void}
    */
   subscribe(handler) {
+    if (this.isClosed()) {
+      return;
+    }
+
     this._listeners.push(handler);
 
     return () => this.unsubscribe(handler);
@@ -229,11 +226,17 @@ exports.Context = class Context {
    * Broadcast a pool size change event.
    */
   broadcast() {
+    const size = this.size();
+
     this._listeners.forEach(handler => {
       try {
-        handler(this.size());
+        handler(size);
       } catch (e) {}
     });
+
+    if (this.isClosed()) {
+      this._listeners = Object.freeze([]);
+    }
   }
 
 };
@@ -278,10 +281,11 @@ exports.Worker = class Worker {
     this.ctx.enter(this.id);
     this.log(`starting monitoring <${this.query}>...`);
 
-    return this._run().catch(err => {
-      this.log(`Stopping monitoring <${this.query}>: ${err}`);
-      this.ctx.leave(this.id);
-    });
+    return this._run()
+      .finally(() => {
+        this.log(`Stopping monitoring <${this.query}>.`);
+        this.ctx.leave(this.id);
+      });
   }
 
   /**
@@ -293,9 +297,13 @@ exports.Worker = class Worker {
    */
   _run() {
     this.ctx.waiting(this.id);
-    this.log(`waiting...`);
+    this.log(`waiting for task to process...`);
 
     return this._nextTask().then(snapshot => {
+      if (!snapshot) {
+        return;
+      }
+
       const {ref, key} = snapshot;
       const task = snapshot.val();
 
@@ -313,12 +321,10 @@ exports.Worker = class Worker {
   }
 
   _process(taskId, task) {
-    const timer = promise.timer(this.timeOut.job);
+    const timer = new cancellation.TimedTokenSource(this.timeOut.job);
 
-    return Promise.race([
-      timer,
-      Promise.try(() => this.processor(taskId, task, timer))
-    ]).finally(() => timer.cancel());
+    return Promise.try(() => this.processor(taskId, task, timer.token))
+      .finally(() => timer.close());
   }
 
   /**
@@ -328,14 +334,10 @@ exports.Worker = class Worker {
    * @returns {Promise<admin.database.DataSnapshot>}
    */
   _nextTask() {
-    const timer = promise.timer(this.timeOut.idle);
-    const shutdown = this.ctx.closing();
+    const timer = new cancellation.TimedTokenSource(this.timeOut.idle, [this.ctx.cancelToken]);
 
-    return Promise.race([
-      this.query.once('child_added'),
-      shutdown.then(() => Promise.reject(new Error('Cancelled.'))),
-      timer.then(() => Promise.reject(new Error('Worker Timed out.')))
-    ]).finally(() => timer.cancel());
+    return nextChange(this.query, 'child_added', timer.token)
+      .finally(() => timer.close());
   }
 
   _claimTask(taskRef) {
@@ -384,11 +386,11 @@ exports.Cleaner = class Cleaner {
    */
   start() {
     this.log(`starting monitoring <${this.query}> for task to reset...`);
-    return this._run().catch(err => {
-      this.error(`stopping monitoring <${this.query}> for task to reset: ${err}`);
-
-      return Promise.reject(err);
-    });
+    return this._run()
+      .finally(() => {
+        this.log(`Stopping monitoring <${this.query}> for task to reset.`);
+        this.ctx.leave(this.id);
+      });
   }
 
   /**
@@ -400,6 +402,10 @@ exports.Cleaner = class Cleaner {
     this.log(`waiting for task to reset...`);
 
     return this._nextTask().then(snapshot => {
+      if (!snapshot) {
+        return;
+      }
+
       const {ref} = snapshot;
       const task = snapshot.val();
 
@@ -415,12 +421,7 @@ exports.Cleaner = class Cleaner {
    * @returns {Promise<void>}
    */
   _nextTask() {
-    const shutdown = this.ctx.closing();
-
-    return Promise.race([
-      shutdown.then(() => Promise.reject(new Error('Cancelled.'))),
-      this.query.once('child_added')
-    ]);
+    return nextChange(this.query, 'child_added', this.ctx.cancelToken);
   }
 
   /**
@@ -431,7 +432,29 @@ exports.Cleaner = class Cleaner {
    * @returns {promise<void>}
    */
   _resetTask(ref, task) {
-    const reset = () => ref.transaction(data => {
+    const now = Date.now();
+    const delay = task.startedAt + (this.timeOut.retry) - now;
+
+    if (delay < 0) {
+      return this._doResetTask(ref);
+    }
+
+    this.log(`Waiting ${delay}ms to reset task <${ref}>`);
+
+    return promise.timer(delay, this.ctx.cancelToken)
+      .then(() => this._doResetTask(ref))
+      .catch(err => {
+        if (err instanceof cancellation.Error) {
+          this.log(`Cancelling scheduled reset of task <${ref}>`);
+          return;
+        }
+
+        return Promise.reject(err);
+      });
+  }
+
+  _doResetTask(ref) {
+    return ref.transaction(data => {
       if (data == null) {
         // A transaction starts with the local state of the node which is null
         // unless the node is being watch.
@@ -460,17 +483,35 @@ exports.Cleaner = class Cleaner {
 
       this.error(`Failed to reset task <ref>`);
     });
-
-    const now = Date.now();
-    const delay = task.startedAt + (this.timeOut.retry) - now;
-
-    if (delay > 0) {
-      this.log(`Waiting ${delay}ms to reset task <${ref}>`);
-
-      return promise.timer(delay).then(reset);
-    }
-
-    return reset();
   }
 
 };
+
+function nextChange(query, eventType, cancelToken) {
+  return new Promise((resolve, reject) => {
+    if (cancelToken.cancellationRequested) {
+      resolve();
+      return;
+    }
+
+    const q = query.limitToFirst(1);
+    const registration = cancelToken.register(onCancel);
+
+    q.on(eventType, onChange, onError);
+
+    function onChange(snapshot) {
+      registration.unregister();
+      resolve(snapshot);
+    }
+
+    function onError(err) {
+      registration.unregister();
+      reject(err);
+    }
+
+    function onCancel() {
+      q.off(eventType, onChange);
+      resolve();
+    }
+  });
+}

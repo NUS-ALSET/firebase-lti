@@ -4,6 +4,8 @@
 
 const once = require('lodash.once');
 
+const cancellation = require('./cancellation');
+
 exports.shim = once(() => {
   exports.shimFinally();
   exports.shimTry();
@@ -45,30 +47,28 @@ exports.try = function (handler) {
  * Set a timer and settles once the timer expires.
  *
  * @param {number} delay Timer expiring delay
+ * @param {CancellationToken} token Cancellation token
  * @returns {Promise<void>}
  */
-exports.timer = function (delay = 0) {
-  let timer, reject;
-  let resolved = false;
-
-  const promise = new Promise((resolve, _reject) => {
-    reject = _reject;
-    timer = setTimeout(() => {
-      resolve();
-      resolved = true;
-    }, delay);
-  });
-
-  promise.cancel = (err = new Error('cancelled')) => {
-    if (resolved) {
-      return;
+exports.timer = function (delay = 0, token = cancellation.Token.none) {
+  return new Promise((resolve, reject) => {
+    if (token.cancellationRequested) {
+      reject(new cancellation.Error('Timer Cancelled'));
     }
 
-    clearTimeout(timer);
-    reject(err);
-  };
+    const timer = setTimeout(onTime, delay);
+    const registration = token.register(onCancel);
 
-  return promise;
+    function onTime() {
+      registration.unregister();
+      resolve();
+    }
+
+    function onCancel() {
+      clearTimeout(timer);
+      reject(new cancellation.Error('Timer Cancelled'));
+    }
+  });
 };
 
 /**

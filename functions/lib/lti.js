@@ -11,10 +11,13 @@ const lti = require('@dinoboff/ims-lti');
 const OAuth = require('oauth-1.0a');
 
 const database = require('./database');
+const promise = require('./promise');
 
 const LTI_CONTENT_TYPES = {
   'application/x-www-form-urlencoded': true
 };
+
+promise.shimFinally();
 
 class HmacSha1 extends _HmacSha1 {
 
@@ -61,7 +64,7 @@ exports.presentation = function (provider) {
   };
 };
 
-exports.sendOutcome = function ({sourceDid, outcome, url, consumer, timer}) {
+exports.sendOutcome = function ({sourceDid, outcome, url, consumer, cancelToken}) {
   const Outcomes = lti.Extensions.Outcomes;
   const body = Outcomes.OutcomeDocument
     .replace(sourceDid, outcome)
@@ -76,9 +79,13 @@ exports.sendOutcome = function ({sourceDid, outcome, url, consumer, timer}) {
     }
   })));
 
-  if (timer) {
-    timer.then(() => request.cancel());
+  if (!cancelToken) {
+    return request;
   }
+
+  const registration = cancelToken.register(() => request.cancel());
+
+  request.finally(() => registration.unregister());
 
   return request;
 };

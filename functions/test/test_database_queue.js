@@ -6,6 +6,7 @@ const admin = require('firebase-admin');
 
 const queue = require('../lib/database/queue');
 const promise = require('../lib/promise');
+const cancellation = require('../lib/cancellation');
 
 const now = () => admin.database.ServerValue.TIMESTAMP;
 const noop = () => {};
@@ -30,21 +31,30 @@ describe('database queue', function () {
   });
 
   describe('Context', function () {
+    let cancelable, ctx;
+
+    beforeEach(function () {
+      cancelable = new cancellation.TokenSource();
+      ctx = new queue.Context({cancelToken: cancelable.token});
+    });
+
+    afterEach(function () {
+      cancelable.cancel();
+      cancelable.close();
+    });
 
     it('should be cancelable', function () {
-      const {ctx, cancel} = queue.Context.create();
       const other = Symbol('other');
       const t = () => promise.timer(0).then(() => other);
 
-      return Promise.race([ctx.closing(), t()])
+      return Promise.race([ctx.closed(), t()])
         .then(result => expect(result).to.equal(other))
-        .then(cancel)
-        .then(() => Promise.race([ctx.closing(), t()]))
+        .then(() => cancelable.cancel())
+        .then(() => Promise.race([ctx.closed(), t()]))
         .then(result => expect(result).not.to.equal(other));
     });
 
     it('should monitor workers', function () {
-      const {ctx} = queue.Context.create();
       const id = 'someWorker';
 
       expect(ctx.isActive()).to.be.false();
@@ -66,22 +76,22 @@ describe('database queue', function () {
   });
 
   describe('Worker', function () {
-    let ctx, cancel, ref, orderByChild, equalTo;
+    let ctx, cancelable, ref, orderByChild, equalTo, limitToFirst;
 
     beforeEach(function () {
-      const c = queue.Context.create();
+      cancelable = new cancellation.TokenSource();
+      ctx = new queue.Context({cancelToken: cancelable.token});
 
-      ctx = c.ctx;
-      cancel = c.cancel;
-
-      equalTo = {};
+      limitToFirst = {on: sinon.stub(), off: sinon.stub()};
+      equalTo = {limitToFirst: sinon.stub().returns(limitToFirst)};
       orderByChild = {equalTo: sinon.stub().returns(equalTo)};
       ref = {orderByChild: sinon.stub().returns(orderByChild)};
       db.ref.returns(ref);
     });
 
     afterEach(function () {
-      cancel();
+      cancelable.cancel();
+      cancelable.close();
     });
 
     it('should monitor /queue/tasks by default', function () {
@@ -114,37 +124,28 @@ describe('database queue', function () {
       const worker = new queue.Worker(ctx);
       const snapshot = {};
 
-      worker.query = {once: sinon.stub().resolves(snapshot)};
+      limitToFirst.on.yields(snapshot);
 
       return worker._nextTask().then(result => expect(result).to.equal(snapshot));
     });
 
-    it('should reject if idle timer expires', function () {
+    it('should resolve to void if idle timer expires', function () {
       const worker = new queue.Worker(ctx, noop, {timeOut: {idle: 0}});
 
-      worker.query = {once: sinon.stub().returns(promise.never())};
-
-      return worker._nextTask().then(
-        () => Promise.reject(new Error('unexpected')),
-        () => {}
-      );
+      return worker._nextTask().then(snapshot => expect(snapshot).to.be.undefined());
     });
 
     it('should reject if pool is shutting down', function () {
       const worker = new queue.Worker(ctx);
 
-      worker.query = {once: sinon.stub().returns(promise.never())};
-      cancel();
+      cancelable.cancel();
 
-      return worker._nextTask().then(
-        () => Promise.reject(new Error('unexpected')),
-        () => {}
-      );
+      return worker._nextTask().then(snapshot => expect(snapshot).to.be.undefined());
     });
 
     describe('start', function () {
       const timeOut = 123000;
-      let worker, processor, task, taskRef, taskSnapshot, timer;
+      let worker, processor, task, taskRef, taskSnapshot, _TimedTokenSource;
 
       beforeEach(function () {
         processor = sinon.stub().resolves();
@@ -157,16 +158,17 @@ describe('database queue', function () {
 
         worker = new queue.Worker(ctx, processor, {timeOut: {job: timeOut}});
         sinon.stub(worker, '_nextTask');
-        worker._nextTask.rejects(new Error('cancelled'));
+        worker._nextTask.resolves();
         worker._nextTask.onFirstCall().resolves(taskSnapshot);
 
-        timer = promise.deferrer();
-        timer.promise.cancel = sinon.spy();
-        sinon.stub(promise, 'timer').returns(timer.promise);
+        _TimedTokenSource = cancellation.TimedTokenSource;
+        cancellation.TimedTokenSource = sinon.spy(function () {
+          return sinon.createStubInstance(_TimedTokenSource);
+        });
       });
 
       afterEach(function () {
-        promise.timer.restore();
+        cancellation.TimedTokenSource = _TimedTokenSource;
       });
 
       it('should process tasks', function () {
@@ -176,13 +178,15 @@ describe('database queue', function () {
         });
       });
 
-      it('should provide a timer', function () {
+      it('should provide a timed cancel token', function () {
         return worker.start().then(() => {
-          expect(promise.timer).to.have.been.calledOnce();
-          expect(promise.timer).to.have.been.calledWithExactly(timeOut);
+          expect(cancellation.TimedTokenSource).to.have.been.calledOnce();
+          expect(cancellation.TimedTokenSource).to.have.been.calledWithNew();
+
+          const {token} = cancellation.TimedTokenSource.lastCall.returnValue;
+
           expect(processor).to.have.been.calledOnce();
-          expect(processor).to.have.been.calledWith('someTaskId', task, timer.promise);
-          expect(timer.promise.cancel).to.have.been.calledOnce();
+          expect(processor).to.have.been.calledWith('someTaskId', task, token);
         });
       });
 
@@ -236,7 +240,7 @@ describe('database queue', function () {
 
         worker._nextTask.callsFake(() => {
           changes.push(ctx.size());
-          return Promise.reject();
+          return Promise.resolve();
         });
 
         return worker.start().then(() => {
@@ -255,7 +259,7 @@ describe('database queue', function () {
 
         worker._nextTask.reset();
         worker._nextTask.callsFake(() => {
-          const result = called ? Promise.reject() : Promise.resolve(taskSnapshot);
+          const result = Promise.resolve(called ? undefined : taskSnapshot);
 
           called = true;
           changes.push(ctx.size());
@@ -283,22 +287,22 @@ describe('database queue', function () {
   });
 
   describe('Cleaner', function () {
-    let ctx, cancel, ref, orderByChild, startAt;
+    let ctx, cancelable, ref, orderByChild, startAt, limitToFirst;
 
     beforeEach(function () {
-      const c = queue.Context.create();
+      cancelable = new cancellation.TokenSource();
+      ctx = new queue.Context({cancelToken: cancelable.token});
 
-      ctx = c.ctx;
-      cancel = c.cancel;
-
-      startAt = {};
+      limitToFirst = {on: sinon.stub(), off: sinon.stub()};
+      startAt = {limitToFirst: sinon.stub().returns(limitToFirst)};
       orderByChild = {startAt: sinon.stub().returns(startAt)};
       ref = {orderByChild: sinon.stub().returns(orderByChild)};
       db.ref.returns(ref);
     });
 
     afterEach(function () {
-      cancel();
+      cancelable.cancel();
+      cancelable.close();
     });
 
     it('should monitor /queue/tasks by default', function () {
@@ -333,21 +337,17 @@ describe('database queue', function () {
         const cleaner = new queue.Cleaner(ctx);
         const snapshot = {};
 
-        cleaner.query = {once: sinon.stub().resolves(snapshot)};
+        limitToFirst.on.yields(snapshot);
 
         return cleaner._nextTask().then(result => expect(result).to.equal(snapshot));
       });
 
-      it('should reject if the worker pool is shutting down', function () {
+      it('should resolve to void if the worker pool is shutting down', function () {
         const cleaner = new queue.Cleaner(ctx);
 
-        cleaner.query = {once: sinon.stub().returns(promise.never())};
-        cancel();
+        cancelable.cancel();
 
-        return cleaner._nextTask().then(
-          () => Promise.reject(new Error('unexpected')),
-          () => {}
-        );
+        return cleaner._nextTask().then(result => expect(result).to.be.undefined());
       });
 
     });
@@ -359,14 +359,13 @@ describe('database queue', function () {
 
       beforeEach(function () {
         sinon.stub(Date, 'now').returns(now);
-        sinon.stub(promise, 'timer');
+        sinon.stub(promise, 'timer').resolves(promise.never());
 
         txResult = {
           committed: true,
           snapshot: {exists: sinon.stub().returns(true)}
         };
         ref = {transaction: sinon.stub().resolves(txResult)};
-        promise.timer.resolves();
       });
 
       afterEach(function () {
@@ -397,12 +396,11 @@ describe('database queue', function () {
         const cleaner = new queue.Cleaner(ctx, {timeOut: {retry}});
         const onceSettled = sinon.spy();
 
-        promise.timer.reset();
         promise.timer.returns(Promise.resolve().then(onceSettled));
 
         return cleaner._resetTask(ref, {startedAt: now}).then(() => {
           expect(promise.timer).to.have.been.calledOnce();
-          expect(promise.timer).to.have.been.calledWithExactly(retry);
+          expect(promise.timer).to.have.been.calledWithExactly(retry, ctx.cancelToken);
           expect(ref.transaction).to.have.been.calledOnce();
           expect(ref.transaction).to.have.been.calledAfter(onceSettled);
         });
@@ -454,36 +452,68 @@ describe('database queue', function () {
   });
 
   describe('create', function () {
-    let c, worker, cleaner, unsubscribe;
+    let ctx, worker, cleaner, unsubscribe, _TokenSource;
 
     beforeEach(function () {
       sinon.stub(queue, 'Cleaner');
-      sinon.stub(queue.Context, 'create');
+      sinon.stub(queue, 'Context');
       sinon.stub(queue, 'Worker');
+      _TokenSource = cancellation.TokenSource;
+
+      cancellation.TokenSource = sinon.spy(function () {
+        return sinon.createStubInstance(_TokenSource);
+      });
 
       unsubscribe = sinon.spy();
       cleaner = {start: sinon.stub().returns(promise.never())};
       worker = {start: sinon.stub().returns(promise.never())};
-      c = {
-        ctx: {subscribe: sinon.stub().returns(unsubscribe)},
-        cancel: sinon.stub().resolves()
+      ctx = {
+        subscribe: sinon.stub().returns(unsubscribe),
+        closed: sinon.stub().resolves()
       };
 
       queue.Cleaner.returns(cleaner);
       queue.Worker.returns(worker);
-      queue.Context.create.returns(c);
+      queue.Context.returns(ctx);
     });
 
     afterEach(function () {
       queue.Cleaner.restore();
-      queue.Context.create.restore();
+      queue.Context.restore();
       queue.Worker.restore();
+      cancellation.TokenSource = _TokenSource;
     });
 
     it('should create a worker pool context', function () {
       queue.create(noop);
 
-      expect(queue.Context.create).to.have.been.calledOnce();
+      expect(queue.Context).to.have.been.calledOnce();
+      expect(queue.Context).to.have.been.calledWithNew();
+
+      expect(cancellation.TokenSource).to.have.been.calledOnce();
+      expect(cancellation.TokenSource).to.have.been.calledWithNew();
+      expect(cancellation.TokenSource).to.have.been.calledWithExactly([cancellation.Token.none]);
+
+      expect(queue.Context).to.have.been.calledWithExactly({
+        cancelToken: cancellation.TokenSource.lastCall.returnValue.token
+      });
+    });
+
+    it('should create a worker pool context link to provided cancel token', function () {
+      const src = new _TokenSource();
+
+      queue.create(noop, {cancelToken: src.token});
+
+      expect(queue.Context).to.have.been.calledOnce();
+      expect(queue.Context).to.have.been.calledWithNew();
+
+      expect(cancellation.TokenSource).to.have.been.calledOnce();
+      expect(cancellation.TokenSource).to.have.been.calledWithNew();
+      expect(cancellation.TokenSource).to.have.been.calledWithExactly([src.token]);
+
+      expect(queue.Context).to.have.been.calledWithExactly({
+        cancelToken: cancellation.TokenSource.lastCall.returnValue.token
+      });
     });
 
     it('should start a worker', function () {
@@ -493,13 +523,13 @@ describe('database queue', function () {
 
       expect(queue.Worker).to.have.been.calledOnce();
       expect(queue.Worker).to.have.been.calledWithNew();
-      expect(queue.Worker).to.have.been.calledWithExactly(c.ctx, noop, options);
+      expect(queue.Worker).to.have.been.calledWithExactly(ctx, noop, options);
       expect(worker.start).to.have.been.calledOnce();
     });
 
     it('should start more worker when the pool has no idled worker', function () {
       const options = {foo: 'bar'};
-      const trigger = size => c.ctx.subscribe.getCalls()
+      const trigger = size => ctx.subscribe.getCalls()
         .map(call => call.args[0])
         .map(listener => listener(size));
 
@@ -514,13 +544,13 @@ describe('database queue', function () {
       trigger({pool: 1, idle: 0});
       expect(queue.Worker).to.have.been.calledOnce();
       expect(queue.Worker).to.have.been.calledWithNew();
-      expect(queue.Worker).to.have.been.calledWithExactly(c.ctx, noop, options);
+      expect(queue.Worker).to.have.been.calledWithExactly(ctx, noop, options);
       expect(worker.start).to.have.been.calledOnce();
     });
 
     it('should limit the size of the pool to the default size', function () {
       const options = {some: 'option'};
-      const trigger = size => c.ctx.subscribe.getCalls()
+      const trigger = size => ctx.subscribe.getCalls()
         .map(call => call.args[0])
         .map(listener => listener(size));
 
@@ -535,13 +565,13 @@ describe('database queue', function () {
       trigger({pool: queue.POOL_SIZE - 1, idle: 0});
       expect(queue.Worker).to.have.been.calledOnce();
       expect(queue.Worker).to.have.been.calledWithNew();
-      expect(queue.Worker).to.have.been.calledWithExactly(c.ctx, noop, options);
+      expect(queue.Worker).to.have.been.calledWithExactly(ctx, noop, options);
       expect(worker.start).to.have.been.calledOnce();
     });
 
     it('should limit the size of the pool to the user provided size', function () {
       const options = {size: 5};
-      const trigger = size => c.ctx.subscribe.getCalls()
+      const trigger = size => ctx.subscribe.getCalls()
         .map(call => call.args[0])
         .map(listener => listener(size));
 
@@ -556,7 +586,7 @@ describe('database queue', function () {
       trigger({pool: 4, idle: 0});
       expect(queue.Worker).to.have.been.calledOnce();
       expect(queue.Worker).to.have.been.calledWithNew();
-      expect(queue.Worker).to.have.been.calledWithExactly(c.ctx, noop, options);
+      expect(queue.Worker).to.have.been.calledWithExactly(ctx, noop, options);
       expect(worker.start).to.have.been.calledOnce();
     });
 
@@ -567,30 +597,14 @@ describe('database queue', function () {
 
       expect(queue.Cleaner).to.have.been.calledOnce();
       expect(queue.Cleaner).to.have.been.calledWithNew();
-      expect(queue.Cleaner).to.have.been.calledWithExactly(c.ctx, options);
+      expect(queue.Cleaner).to.have.been.calledWithExactly(ctx, options);
       expect(cleaner.start).to.have.been.calledOnce();
     });
 
-    it('should provide a shutdown function', function () {
-      const q = queue.create(noop);
-
-      q.stop();
-      expect(unsubscribe).to.have.been.calledOnce();
-      expect(c.cancel).to.have.been.calledOnce();
-      expect(unsubscribe).to.have.been.calledBefore(c.cancel);
-    });
-
     it('should shutdown if the cleaner reject', function () {
-      cleaner.start.reset();
-      cleaner.start.rejects();
+      cleaner.start = sinon.stub().rejects();
 
-      const q = queue.create(noop);
-
-      return q.running.then(() => {
-        expect(unsubscribe).to.have.been.calledOnce();
-        expect(c.cancel).to.have.been.calledOnce();
-        expect(unsubscribe).to.have.been.calledBefore(c.cancel);
-      });
+      return queue.create(noop);
     });
 
   });

@@ -9,6 +9,7 @@ const uuid = require('uuid/v4');
 
 const database = require('../lib/database');
 const lti = require('../lib/lti');
+const cancellation = require('../lib/cancellation');
 
 main();
 
@@ -16,15 +17,19 @@ function main() {
   return new Promise(resolve => resolve(config()))
     .then(conf => admin.initializeApp(conf.firebase))
     .then(processTasks)
-    .then(console.log, console.error)
+    .catch(console.error)
     .then(() => admin.app().delete());
 }
 
 function processTasks() {
-  const {running, stop} = database.launches.outcomes.process(onNewTask, {size: 5});
+  const cancelable = new cancellation.TokenSource();
+  const running = database.launches.outcomes.process(onNewTask, {
+    size: 5,
+    cancelToken: cancelable.token
+  });
 
   shimSigint();
-  process.on('SIGINT', stop);
+  process.on('SIGINT', () => cancelable.cancel());
 
   return running;
 }
