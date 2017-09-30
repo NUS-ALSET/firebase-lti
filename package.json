@@ -21,7 +21,9 @@
     "format": "npm run lint -- --fix",
     "lint": "eslint public/ test/ functions/lib/",
     "postinstall": "cd functions; npm install",
-    "start": "firebase serve --only functions,hosting",
+    "start": "run-p start-server send-outcome",
+    "start-server": "firebase serve --only functions,hosting",
+    "send-outcome": "node ./functions/bin/outcome.js",
     "test": "firebase-bolt database.rules.bolt && mocha test/"
   },
   "repository": {
