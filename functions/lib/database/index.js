@@ -207,15 +207,7 @@ function newLaunch(req) {
     resourceLinkId,
     contextId: req.context_id || null,
     toolConsumerGuid: req.body.tool_consumer_instance_guid || null,
-    lti: {messageType, version},
-    presentation: {
-      target: req.body.launch_presentation_target || null,
-      local: req.body.launch_presentation_local || null,
-      cssURL: req.body.launch_presentation_css_url || null,
-      width: req.body.launch_presentation_width || null,
-      height: req.body.launch_presentation_height || null,
-      returnURL: req.body.launch_presentation_return_url || null
-    }
+    lti: {messageType, version}
   };
 }
 

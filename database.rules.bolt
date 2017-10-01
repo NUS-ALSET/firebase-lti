@@ -51,22 +51,12 @@ type Activity {
   resourceLinkId: String;
   contextId: String | Null;
   toolConsumerGuid: String | Null;
-  presentation: Presentation | Null;
   custom: String[] | Null;
 }
 
 type LTI {
   messageType: String;
   version: String;
-}
-
-type Presentation {
-  target: String | Null;
-  local: String | Null;
-  cssURL: String | Null;
-  width: Number | Null;
-  height: Number | Null;
-  returnURL: String | Null;
 }
 
 type CurrentTimestamp extends Number {
