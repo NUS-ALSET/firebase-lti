@@ -92,7 +92,7 @@
       const db = firebase.database();
       const ref = db.ref(`/provider/launches/${this.domain}/${this.resourceLinkId}/users/${this.uid}/grade`);
 
-      const handler = ref.once('value', snapshot => {
+      const handler = ref.on('value', snapshot => {
         this.grade = snapshot.exists() ? snapshot.val() : 0;
         this.onGrade(this.grade);
       }, console.error);
