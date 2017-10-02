@@ -24,7 +24,7 @@ remote access to the Firebase server):
 ```shell
 npm run deploy-rules
 npm run deploy-triggers
-npm start
+DEBUG=* npm start
 ```
 
 
@@ -39,6 +39,16 @@ firebase deploy
 ```
 
 The LTI plugin is now serving.
+
+To send outcome request, you need to run a local scripts:
+```shell
+npm run send-outcome
+```
+
+TODO:
+
+- describe out to deploy script.
+- provide cloud-functions to process outcome request on Blaze plan.
 
 
 ## Installation

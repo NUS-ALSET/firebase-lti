@@ -40,14 +40,14 @@ describe('server', function () {
     beforeEach(function () {
       sinon.stub(database, 'getCredentials');
       sinon.stub(database, 'nonceStore');
-      sinon.stub(database.launches, 'getOrCreate');
+      sinon.stub(database.launches, 'init');
       sinon.stub(database.launches, 'authenticate');
     });
 
     afterEach(function () {
       database.getCredentials.restore();
       database.nonceStore.restore();
-      database.launches.getOrCreate.restore();
+      database.launches.init.restore();
       database.launches.authenticate.restore();
     });
 
@@ -81,7 +81,7 @@ describe('server', function () {
 
       database.getCredentials.returns(Promise.resolve({key: 'someKey', secret: 'someSecret'}));
       database.nonceStore.returns(nonceStore);
-      database.launches.getOrCreate.returns(Promise.resolve({val: sinon.stub().returns(launch)}));
+      database.launches.init.returns(Promise.resolve({val: sinon.stub().returns(launch)}));
       database.launches.authenticate.returns(Promise.resolve('someToken'));
 
       return req.expect(200).then(res => {
@@ -89,8 +89,8 @@ describe('server', function () {
         expect(database.getCredentials).to.have.been.calledWithExactly('someKey');
         expect(nonceStore.isNew).to.have.been.calledOnce();
         expect(nonceStore.isNew).to.have.been.calledWithExactly('someNonce', params.oauth_timestamp, sinon.match.func);
-        expect(database.launches.getOrCreate).to.have.been.calledOnce();
-        expect(database.launches.getOrCreate).to.have.been.calledWithExactly(sinon.match({
+        expect(database.launches.init).to.have.been.calledOnce();
+        expect(database.launches.init).to.have.been.calledWithExactly(sinon.match({
           instructor: true,
           consumer_key: 'someKey',
           body: sinon.match({resource_link_id: 'someResource'})
